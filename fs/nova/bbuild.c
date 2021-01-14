@@ -34,6 +34,7 @@
 #include "inode.h"
 #include "log.h"
 
+
 void nova_init_header(struct super_block *sb,
 	struct nova_inode_info_header *sih, u16 i_mode)
 {
@@ -61,6 +62,14 @@ void nova_init_header(struct super_block *sb,
 	sih->alter_log_head = 0;
 	sih->alter_log_tail = 0;
 	sih->i_blk_type = NOVA_DEFAULT_BLOCK_TYPE;
+
+#ifdef PERCORE	
+	sih->global_log = kzalloc(sizeof(struct global_log), GFP_KERNEL);
+	/* 56 = # of CPU cores */
+	for(int i=0; i<56; i++)
+		sih->global_log->local_log[i] = 0;
+#endif
+
 }
 
 static inline void set_scan_bm(unsigned long bit,

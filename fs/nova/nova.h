@@ -316,11 +316,13 @@ static inline void memset_nt(void *dest, uint32_t dword, size_t length)
  */
 static inline void *nova_get_block(struct super_block *sb, u64 block)
 {
-	//struct nova_super_block *ps = nova_get_super(sb);
+#ifndef NUMA_NOVA
+	struct nova_super_block *ps = nova_get_super(sb);
 
-	//return block ? ((void *)ps + block) : NULL;
-	
+	return block ? ((void *)ps + block) : NULL;
+#else
 	return block ? nova_get_block_for_NUMA(sb,block) : NULL;
+#endif
 }
 
 static inline int nova_get_reference(struct super_block *sb, u64 block,
@@ -337,11 +339,13 @@ static inline int nova_get_reference(struct super_block *sb, u64 block,
 static inline u64
 nova_get_addr_off(struct nova_sb_info *sbi, void *addr)
 {
-	//NOVA_ASSERT((addr >= sbi->virt_addr) &&
-	//		(addr < (sbi->virt_addr + sbi->initsize)));
-	//return (u64)(addr - sbi->virt_addr);
-	
+#ifndef NUMA_NOVA
+	NOVA_ASSERT((addr >= sbi->virt_addr) &&
+			(addr < (sbi->virt_addr + sbi->initsize)));
+	return (u64)(addr - sbi->virt_addr);
+#else
 	return nova_get_addr_off_for_NUMA(sbi, addr);
+#endif
 }
 
 static inline u64

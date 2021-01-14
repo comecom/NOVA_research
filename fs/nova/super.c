@@ -121,8 +121,10 @@ static int nova_get_nvmm_info(struct super_block *sb,
 	struct dax_device *dax_dev;
 	int ret;
 
+#ifdef NUMA_NOVA
 	nova_get_multi_nvmm_info(sb,sbi);
-	/*
+
+#else 
 	ret = bdev_dax_supported(sb->s_bdev, PAGE_SIZE);
 	nova_dbg_verbose("%s: dax_supported = %d; bdev->super=0x%p",
 			 __func__, ret, sb->s_bdev->bd_super);
@@ -163,7 +165,8 @@ static int nova_get_nvmm_info(struct super_block *sb,
 	nova_dbg("%s: dev %s, phys_addr 0x%llx, virt_addr 0x%lx, size %ld\n",
 		__func__, sbi->s_bdev->bd_disk->disk_name,
 		sbi->phys_addr, (unsigned long)sbi->virt_addr, sbi->initsize);
-	*/
+#endif
+
 	return 0;
 }
 

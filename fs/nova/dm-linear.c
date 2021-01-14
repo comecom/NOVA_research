@@ -20,8 +20,9 @@ void nova_get_multi_nvmm_info(struct super_block *sb, struct nova_sb_info *sbi)
 
         multi_pm[i]->virt_addr = NULL;
     }
-    multi_pm[0]->host = "pmem12";
-    multi_pm[1]->host = "pmem13";
+	/* TODO: Changing the hard coding to auto version */
+    multi_pm[0]->host = "pmem0";
+    multi_pm[1]->host = "pmem1.3";
 	/*
     multi_pm[0]->host = "pmem0";
     multi_pm[1]->host = "pmem1";

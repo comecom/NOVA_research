@@ -20,6 +20,17 @@
 #include "inode.h"
 #include "log.h"
 
+/*TODO: Add & Call de-allocate function about local log*/
+static void nova_init_local_log(struct nova_inode_info_header *sih, int num)
+{
+	struct local_log *new_log_block;
+	new_log_block = kzalloc(sizeof(struct local_log),GFP_KERNEL);
+	new_log_block->core = num;
+	new_log_block->head = new_log_block->tail = 0;
+	new_log_block->log_pages = 0;
+	sih->global_log->local_log[num] = new_log_block;
+}
+
 static int nova_execute_invalidate_reassign_logentry(struct super_block *sb,
 	void *entry, enum nova_entry_type type, int reassign,
 	unsigned int num_free)
@@ -1151,6 +1162,10 @@ static int nova_initialize_inode_log(struct super_block *sb,
 	u64 new_block;
 	int allocated;
 
+#ifdef PERCORE
+	nova_init_local_log(sih, nova_get_cpuid(sb));
+#endif
+	
 	allocated = nova_allocate_inode_log_pages(sb, sih,
 					1, &new_block, ANY_CPU,
 					log_id == MAIN_LOG ? 0 : 1);

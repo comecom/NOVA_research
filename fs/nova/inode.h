@@ -14,6 +14,19 @@ enum nova_new_inode_type {
 	TYPE_MKDIR
 };
 
+/* Structure of Per-Core Log */
+struct global_log {
+	/* 56 = # of CPU cores */
+	struct local_log *local_log[56];
+};
+
+struct local_log {
+	u64 head;
+	u64 tail;
+	int core;
+	int log_pages;
+	int padding[10];
+};
 
 /*
  * Structure of an inode in PMEM
@@ -99,6 +112,8 @@ struct nova_inode_info_header {
 	u64 alter_log_head;		/* Alternate log head pointer */
 	u64 alter_log_tail;		/* Alternate log tail pointer */
 	u8  i_blk_type;
+
+	struct global_log *global_log;
 };
 
 /* For rebuild purpose, temporarily store pi infomation */
