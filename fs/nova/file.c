@@ -647,7 +647,8 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 	int try_inplace = 0;
 	u64 epoch_id;
 	u32 time;
-
+	int cpuid;
+	struct local_log *my_local_log;
 
 	if (len == 0)
 		return 0;
@@ -702,8 +703,18 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 	nova_dbgv("%s: inode %lu, offset %lld, count %lu\n",
 			__func__, inode->i_ino,	pos, count);
 
+	
 	epoch_id = nova_get_epoch_id(sb);
+#ifdef PERCORE
+	cpuid = nova_get_cpuid(sb);
+	my_local_log = sih->global_log->local_log[cpuid];
+	if(my_local_log == 0)
+		update.tail = 0;
+	else
+		update.tail = my_local_log->tail;
+#else
 	update.tail = sih->log_tail;
+#endif
 	update.alter_tail = sih->alter_log_tail;
 	while (num_blocks > 0) {
 		offset = pos & (nova_inode_blk_size(sih) - 1);
@@ -762,9 +773,13 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 		nova_init_file_write_entry(sb, sih, &entry_data, epoch_id,
 					start_blk, allocated, blocknr, time,
 					file_size);
-
+#ifdef PERCORE
+		ret = pnova_append_file_write_entry(sb, pi, inode,
+					&entry_data, &update, my_local_log);
+#else
 		ret = nova_append_file_write_entry(sb, pi, inode,
 					&entry_data, &update);
+#endif
 		if (ret) {
 			nova_dbg("%s: append inode entry failed\n", __func__);
 			ret = -ENOSPC;
@@ -797,11 +812,19 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 	sih->i_blocks += (total_blocks << (data_bits - sb->s_blocksize_bits));
 
 	nova_memunlock_inode(sb, pi);
+#ifdef PERCORE
+	pnova_update_inode(sb, inode, pi, &update, 1, my_local_log);
+#else
 	nova_update_inode(sb, inode, pi, &update, 1);
+#endif
 	nova_memlock_inode(sb, pi);
 
 	/* Free the overlap blocks after the write is committed */
+#ifdef PERCORE
+	ret = pnova_reassign_file_tree(sb, sih, begin_tail, my_local_log);
+#else
 	ret = nova_reassign_file_tree(sb, sih, begin_tail);
+#endif
 	if (ret)
 		goto out;
 

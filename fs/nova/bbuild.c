@@ -38,6 +38,7 @@
 void nova_init_header(struct super_block *sb,
 	struct nova_inode_info_header *sih, u16 i_mode)
 {
+	int i;
 	sih->log_pages = 0;
 	sih->i_size = 0;
 	sih->ino = 0;
@@ -66,7 +67,7 @@ void nova_init_header(struct super_block *sb,
 #ifdef PERCORE	
 	sih->global_log = kzalloc(sizeof(struct global_log), GFP_KERNEL);
 	/* 56 = # of CPU cores */
-	for(int i=0; i<56; i++)
+	for(i=0; i<56; i++)
 		sih->global_log->local_log[i] = 0;
 #endif
 

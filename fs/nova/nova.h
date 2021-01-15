@@ -316,12 +316,12 @@ static inline void memset_nt(void *dest, uint32_t dword, size_t length)
  */
 static inline void *nova_get_block(struct super_block *sb, u64 block)
 {
-#ifndef NUMA_NOVA
+#ifdef NUMA_NOVA
+	return block ? nova_get_block_for_NUMA(sb,block) : NULL;
+#else
 	struct nova_super_block *ps = nova_get_super(sb);
 
 	return block ? ((void *)ps + block) : NULL;
-#else
-	return block ? nova_get_block_for_NUMA(sb,block) : NULL;
 #endif
 }
 
@@ -340,11 +340,11 @@ static inline u64
 nova_get_addr_off(struct nova_sb_info *sbi, void *addr)
 {
 #ifndef NUMA_NOVA
+	return nova_get_addr_off_for_NUMA(sbi, addr);
+#else
 	NOVA_ASSERT((addr >= sbi->virt_addr) &&
 			(addr < (sbi->virt_addr + sbi->initsize)));
 	return (u64)(addr - sbi->virt_addr);
-#else
-	return nova_get_addr_off_for_NUMA(sbi, addr);
 #endif
 }
 
@@ -984,6 +984,8 @@ void nova_init_file_write_entry(struct super_block *sb,
 	u64 size);
 int nova_reassign_file_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, u64 begin_tail);
+int pnova_reassign_file_tree(struct super_block *sb,
+	struct nova_inode_info_header *sih, u64 begin_tail, struct local_log *my_local_log);
 unsigned long nova_check_existing_entry(struct super_block *sb,
 	struct inode *inode, unsigned long num_blocks, unsigned long start_blk,
 	struct nova_file_write_entry **ret_entry,
@@ -1051,6 +1053,10 @@ int nova_inode_log_fast_gc(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
 	u64 curr_tail, u64 new_block, u64 alter_new_block, int num_pages,
 	int force_thorough);
+int pnova_inode_log_fast_gc(struct super_block *sb,
+	struct nova_inode *pi, struct nova_inode_info_header *sih,
+	u64 curr_tail, u64 new_block, u64 alter_new_block, int num_pages,
+	int force_thorough, struct local_log *my_local_log);
 
 /* ioctl.c */
 extern long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
