@@ -1,7 +1,7 @@
 # Research Code based on NOVA File System
 
 ### Branch
-nova-base: NOVA v5.1 forked from UCSD
+BASE-NOVA: NOVA v5.1 forked from UCSD  
 NUMA-NOVA: MASCOTS version. We add PMs device mapper functions and per-core log structure.
 
 ### TODO list
