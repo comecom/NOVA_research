@@ -94,7 +94,7 @@ static int nova_invalidate_reassign_logentry(struct super_block *sb,
 
 	nova_execute_invalidate_reassign_logentry(sb, entry, type,
 						reassign, num_free);
-	nova_update_alter_entry(sb, entry);
+	//nova_update_alter_entry(sb, entry);
 	nova_memlock_range(sb, entry, CACHELINE_SIZE);
 
 	return 0;
@@ -960,7 +960,8 @@ int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 
 	NOVA_START_TIMING(append_file_entry_t, append_time);
 
-	nova_update_entry_csum(data);
+	/* NOVA BUG(?): DRAM FLUSH seriously impairs performance */
+	//nova_update_entry_csum(data);
 
 	entry_info.type = FILE_WRITE;
 	entry_info.update = update;
@@ -992,7 +993,7 @@ int pnova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	NOVA_START_TIMING(append_file_entry_t, append_time);
 
 	/* NOVA BUG(?): DRAM FLUSH seriously impairs performance */
-	nova_update_entry_csum(data);
+	//nova_update_entry_csum(data);
 
 	entry_info.type = FILE_WRITE;
 	entry_info.update = update;
@@ -1580,7 +1581,10 @@ u64 pnova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 	if (tail)
 		curr_p = tail;
 	else if (log_id == MAIN_LOG)
-		curr_p = sih->log_tail;
+		if(my_local_log == 0)
+			curr_p = 0;
+		else
+			curr_p = my_local_log->tail;
 	else
 		curr_p = sih->alter_log_tail;
 

@@ -339,7 +339,7 @@ static inline int nova_get_reference(struct super_block *sb, u64 block,
 static inline u64
 nova_get_addr_off(struct nova_sb_info *sbi, void *addr)
 {
-#ifndef NUMA_NOVA
+#ifdef NUMA_NOVA
 	return nova_get_addr_off_for_NUMA(sbi, addr);
 #else
 	NOVA_ASSERT((addr >= sbi->virt_addr) &&
