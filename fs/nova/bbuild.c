@@ -35,6 +35,16 @@
 #include "log.h"
 
 
+/*TODO: Add & Call de-allocate function about local log*/
+static void nova_init_local_log(struct nova_inode_info_header *sih, int num)
+{
+	struct local_log *new_log_block;
+	new_log_block = kzalloc(sizeof(struct local_log),GFP_KERNEL);
+	new_log_block->core = num;
+	new_log_block->head = new_log_block->tail = 0;
+	new_log_block->log_pages = 0;
+	sih->global_log->local_log[num] = new_log_block;
+}
 void nova_init_header(struct super_block *sb,
 	struct nova_inode_info_header *sih, u16 i_mode)
 {
@@ -67,8 +77,10 @@ void nova_init_header(struct super_block *sb,
 #ifdef PERCORE	
 	sih->global_log = kzalloc(sizeof(struct global_log), GFP_KERNEL);
 	/* 56 = # of CPU cores */
-	for(i=0; i<56; i++)
+	for(i=0; i<56; i++){
 		sih->global_log->local_log[i] = 0;
+		nova_init_local_log(sih, i);
+	}
 #endif
 
 }

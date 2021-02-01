@@ -21,6 +21,7 @@
 #include "log.h"
 
 /*TODO: Add & Call de-allocate function about local log*/
+/*
 static void nova_init_local_log(struct nova_inode_info_header *sih, int num)
 {
 	struct local_log *new_log_block;
@@ -30,7 +31,7 @@ static void nova_init_local_log(struct nova_inode_info_header *sih, int num)
 	new_log_block->log_pages = 0;
 	sih->global_log->local_log[num] = new_log_block;
 }
-
+*/
 static int nova_execute_invalidate_reassign_logentry(struct super_block *sb,
 	void *entry, enum nova_entry_type type, int reassign,
 	unsigned int num_free)
@@ -1299,8 +1300,9 @@ static int pnova_initialize_inode_log(struct super_block *sb,
 {
 	u64 new_block;
 	int allocated;
+	int cpuid = nova_get_cpuid(sb);
 
-	nova_init_local_log(sih, nova_get_cpuid(sb));
+	//nova_init_local_log(sih, cpuid);
 	
 	allocated = nova_allocate_inode_log_pages(sb, sih,
 					1, &new_block, ANY_CPU,
@@ -1582,9 +1584,11 @@ u64 pnova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 		curr_p = tail;
 	else if (log_id == MAIN_LOG)
 		if(my_local_log == 0)
-			curr_p = 0;
+			curr_p = 0;		
 		else
 			curr_p = my_local_log->tail;
+		
+	
 	else
 		curr_p = sih->alter_log_tail;
 
