@@ -469,8 +469,8 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 	size_t copied = 0, error = 0;
 
 	//jw definition
-	/*int cpuid, inode_loc;
-	struct nova_inode *pi;*/
+	int cpuid, inode_loc;
+	struct nova_inode *pi;
 
 
 	INIT_TIMING(memcpy_time);
@@ -480,11 +480,12 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 	offset = pos & ~PAGE_MASK;
 
 	//jw
-	/*pi = nova_get_block(sb, sih->pi_addr);
+	pi = nova_get_block(sb, sih->pi_addr);
 	//printk("log_tail : %lu\n", (unsigned long)pi->log_tail);
 	cpuid = nova_get_cpuid(sb);
 	
 
+	// pmem size : about 800G
 	if((unsigned long)pi->log_tail<800000000000)inode_loc = 0;
 	else inode_loc = 1;
 	
@@ -497,7 +498,7 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 		printk("remote access : %lu\n", (unsigned long)pi->remote);
 		if((unsigned long)pi->remote > 5)
 			printk("too many remote access!\n");
-	}*/
+	}
 
 	if (!access_ok(buf, len)) {
 		error = -EFAULT;
@@ -700,8 +701,8 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 	pi = nova_get_block(sb, sih->pi_addr);
 	
 	//jw local&remote init
-	//pi->local = 0;
-	//pi->remote = 0;
+	pi->local = 0;
+	pi->remote = 0;
 
 	/* nova_inode tail pointer will be updated and we make sure all other
 	 * inode fields are good before checksumming the whole structure

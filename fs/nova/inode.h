@@ -76,8 +76,9 @@ struct nova_inode {
 	__le32	csum;            /* CRC32 checksum */
 
 	//jw definition
-	//__le64 remote;
-	//__le64 local;
+	__le64 remote;
+	__le64 local;
+	
 	/* Leave 8 bytes for inode table tail pointer */
 } __attribute((__packed__));
 
