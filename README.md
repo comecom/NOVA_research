@@ -1,13 +1,11 @@
 # Research Code based on NOVA File System
 
-### Branch
-BASE-NOVA: NOVA v5.1 forked from UCSD  
-NUMA-NOVA: MASCOTS version. We add PMs device mapper functions and per-core log structure.
+### access pattern
+1. figure out the pattern (local/remote access for webserver reader thread)
+2. figure out remote/local access pattern "on a per-file basis" using PMEM inode
 
 ### TODO list
-1. Make "local log" as persist.
-2. Add range lock and parallelizing shared file I/O
-3. Do testing for various workloads
+1. when to migrate (threshold)
+2. how to migrate (per-file / per-block)
+3. etc.
 
-### NOTE
-1. In current implementation, we just copy&paste and minor modify the existing code to separate code flow. (We don't want the per core log functions to interfere with the existing execution behavior. For example, the dir operation should be performed with the per-inode log, not the per-core log.)
