@@ -467,11 +467,37 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 	unsigned long offset;
 	loff_t isize, pos;
 	size_t copied = 0, error = 0;
+
+	//jw definition
+	/*int cpuid, inode_loc;
+	struct nova_inode *pi;*/
+
+
 	INIT_TIMING(memcpy_time);
 
 	pos = *ppos;
 	index = pos >> PAGE_SHIFT;
 	offset = pos & ~PAGE_MASK;
+
+	//jw
+	/*pi = nova_get_block(sb, sih->pi_addr);
+	//printk("log_tail : %lu\n", (unsigned long)pi->log_tail);
+	cpuid = nova_get_cpuid(sb);
+	
+
+	if((unsigned long)pi->log_tail<800000000000)inode_loc = 0;
+	else inode_loc = 1;
+	
+	if(cpuid/28 == inode_loc){
+		(pi->local) += 1;
+		printk("local access : %lu\n", (unsigned long)pi->local);
+	}
+	else{
+		(pi->remote) += 1;
+		printk("remote access : %lu\n", (unsigned long)pi->remote);
+		if((unsigned long)pi->remote > 5)
+			printk("too many remote access!\n");
+	}*/
 
 	if (!access_ok(buf, len)) {
 		error = -EFAULT;
@@ -487,6 +513,10 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 
 	if (len > isize - pos)
 		len = isize - pos;
+	
+	//jw test
+	//printk("%s: inode %lu, offset %lld, count %lu, size %lld\n",
+    //    __func__, inode->i_ino, pos, len, isize);
 
 	if (len <= 0)
 		goto out;
@@ -540,6 +570,7 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 
 		nvmm = get_nvmm(sb, sih, entryc, index);
 		dax_mem = nova_get_block(sb, (nvmm << PAGE_SHIFT));
+		//dax_mem : PM addr of "target read block"
 
 memcpy:
 		nr = nr - offset;
@@ -667,6 +698,10 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 	count = len;
 
 	pi = nova_get_block(sb, sih->pi_addr);
+	
+	//jw local&remote init
+	//pi->local = 0;
+	//pi->remote = 0;
 
 	/* nova_inode tail pointer will be updated and we make sure all other
 	 * inode fields are good before checksumming the whole structure
@@ -740,6 +775,7 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 		if (bytes > count)
 			bytes = count;
 
+		//kmem : PM addr
 		kmem = nova_get_block(inode->i_sb,
 			     nova_get_block_off(sb, blocknr, sih->i_blk_type));
 
@@ -770,6 +806,7 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 		else
 			file_size = cpu_to_le64(inode->i_size);
 
+		//init in DRAM
 		nova_init_file_write_entry(sb, sih, &entry_data, epoch_id,
 					start_blk, allocated, blocknr, time,
 					file_size);

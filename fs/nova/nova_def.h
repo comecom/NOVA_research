@@ -58,6 +58,7 @@
 
 #define NOVA_INODE_BITS   7
 #define NOVA_INODE_SIZE   128    /* must be power of two */
+//#define NOVA_INODE_SIZE   256    /* jw : remote&local member */
 
 #define NOVA_NAME_LEN 255
 
