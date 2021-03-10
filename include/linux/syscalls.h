@@ -479,6 +479,9 @@ asmlinkage long sys_preadv(unsigned long fd, const struct iovec __user *vec,
 asmlinkage long sys_pwritev(unsigned long fd, const struct iovec __user *vec,
 			    unsigned long vlen, unsigned long pos_l, unsigned long pos_h);
 
+	//my file migration
+asmlinkage long sys_migrate_file(unsigned int fd, int from, int to);
+
 /* fs/sendfile.c */
 asmlinkage long sys_sendfile64(int out_fd, int in_fd,
 			       loff_t __user *offset, size_t count);

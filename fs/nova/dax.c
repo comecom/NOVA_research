@@ -298,8 +298,8 @@ void nova_init_file_write_entry(struct super_block *sb,
 	entry->updating = 0;
 	entry->epoch_id = epoch_id;
 	entry->trans_id = sih->trans_id;
-	entry->pgoff = cpu_to_le64(pgoff);
-	entry->num_pages = cpu_to_le32(num_pages);
+	entry->pgoff = cpu_to_le64(pgoff);//startk_blk
+	entry->num_pages = cpu_to_le32(num_pages);//allocated
 	entry->invalid_pages = 0;
 	entry->block = cpu_to_le64(nova_get_block_off(sb, blocknr,
 							sih->i_blk_type));

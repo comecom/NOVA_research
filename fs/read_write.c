@@ -569,6 +569,28 @@ static inline void file_pos_write(struct file *file, loff_t pos)
 		file->f_pos = pos;
 }
 
+//jw migrate file
+ssize_t ksys_migrate_file(unsigned fd, int from, int to)
+{	
+	struct fd f = fdget_pos(fd);
+	 
+    printk("ksys_migrate_file\n");
+
+	/*if(f.file){
+		if(file->f_op->migrate_file)
+			return file->f_op->migrate_file(f.file, from, to);
+		else
+			return -EINVAL;
+	}
+	else
+		return -EBADF*/
+}
+
+SYSCALL_DEFINE3(migrate_file, int, fd, int, from, int, to)
+{
+    return ksys_migrate_file(fd, from, to);
+}
+
 ssize_t ksys_read(unsigned int fd, char __user *buf, size_t count)
 {
 	struct fd f = fdget_pos(fd);

@@ -481,7 +481,7 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 
 	//jw
 	pi = nova_get_block(sb, sih->pi_addr);
-	//printk("log_tail : %lu\n", (unsigned long)pi->log_tail);
+	printk("[read] log_tail : %lu\n", (unsigned long)pi->log_tail);
 	cpuid = nova_get_cpuid(sb);
 	
 
@@ -701,6 +701,8 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 	pi = nova_get_block(sb, sih->pi_addr);
 	
 	//jw local&remote init
+	printk("[write] log_tail : %lu\n", (unsigned long)pi->log_tail);
+
 	pi->local = 0;
 	pi->remote = 0;
 
@@ -975,6 +977,8 @@ const struct file_operations nova_dax_file_operations = {
 	.llseek			= nova_llseek,
 	.read			= nova_dax_file_read,
 	.write			= nova_dax_file_write,
+	//jw migrate file operation
+	//.migrate_file	= nova_dax_file_migrate,
 	.read_iter		= nova_dax_read_iter,
 	.write_iter		= nova_dax_write_iter,
 	.mmap			= nova_dax_file_mmap,
