@@ -573,11 +573,18 @@ static inline void file_pos_write(struct file *file, loff_t pos)
 ssize_t ksys_migrate_file(unsigned fd, int from, int to)
 {	
 	struct fd f = fdget_pos(fd);
-	 
-    printk("ksys_migrate_file\n");
 
+	printk("ksys_migrate_file\n");
+	
 	/*if(f.file){
-		if(file->f_op->migrate_file)
+		loff_t pos = file_pos_read(f.file);
+
+		ret = vfs_migrate(
+	}
+	return ret;*/
+	/*if(f.file){
+		if(file->f_op->migrate_file){
+			loff_t pos = file_pos_read(f.file)
 			return file->f_op->migrate_file(f.file, from, to);
 		else
 			return -EINVAL;
@@ -598,6 +605,7 @@ ssize_t ksys_read(unsigned int fd, char __user *buf, size_t count)
 
 	if (f.file) {
 		loff_t pos = file_pos_read(f.file);
+		
 		ret = vfs_read(f.file, buf, count, &pos);
 		if (ret >= 0)
 			file_pos_write(f.file, pos);
@@ -618,6 +626,7 @@ ssize_t ksys_write(unsigned int fd, const char __user *buf, size_t count)
 
 	if (f.file) {
 		loff_t pos = file_pos_read(f.file);
+
 		ret = vfs_write(f.file, buf, count, &pos);
 		if (ret >= 0)
 			file_pos_write(f.file, pos);
