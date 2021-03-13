@@ -972,13 +972,41 @@ static int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
 
 	return 0;
 }
+static ssize_t do_dax_file_migrate(struct file *filp, int from, int to)
+{
+	struct inode *inode = filp->f_mapping->host;
+        struct super_block *sb = inode->i_sb;
+        struct nova_inode_info *si = NOVA_I(inode);
+        struct nova_inode_info_header *sih = &si->header;
+        struct nova_file_write_entry *entry;
+	struct nova_inode *pi;
 
+	int cpuid = nova_get_cpuid(sb);
+
+	pi = nova_get_block(sb, sih->pi_addr);
+        printk("[mig] log_tail : %lu\n", (unsigned long)pi->log_tail);
+	printk("cpuid : %d\n", cpuid);
+
+	return 21;
+}
+static ssize_t nova_dax_file_migrate(struct file *filp, int from , int to)
+{
+	struct inode *inode = filp->f_mapping->host;
+        ssize_t res;
+
+        inode_lock_shared(inode);
+        res = do_dax_file_migrate(filp, from, to);
+	inode_unlock_shared(inode);
+        
+	return res;
+
+}
 const struct file_operations nova_dax_file_operations = {
 	.llseek			= nova_llseek,
 	.read			= nova_dax_file_read,
 	.write			= nova_dax_file_write,
 	//jw migrate file operation
-	//.migrate_file	= nova_dax_file_migrate,
+	.migrate_file		= nova_dax_file_migrate,
 	.read_iter		= nova_dax_read_iter,
 	.write_iter		= nova_dax_write_iter,
 	.mmap			= nova_dax_file_mmap,
@@ -1059,6 +1087,9 @@ const struct file_operations nova_wrap_file_operations = {
 	.llseek			= nova_llseek,
 	.read			= nova_dax_file_read,
 	.write			= nova_dax_file_write,
+	//jw migrate file operation
+        .migrate_file           = nova_dax_file_migrate,
+
 	.read_iter		= nova_wrap_rw_iter,
 	.write_iter		= nova_wrap_rw_iter,
 	.mmap			= nova_dax_file_mmap,

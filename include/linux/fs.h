@@ -1787,6 +1787,11 @@ struct file_operations {
 	loff_t (*llseek) (struct file *, loff_t, int);
 	ssize_t (*read) (struct file *, char __user *, size_t, loff_t *);
 	ssize_t (*write) (struct file *, const char __user *, size_t, loff_t *);
+	
+	//jw migrate operation
+	ssize_t (*migrate_file) (struct file *, int, int);
+	//ssize_t (*a) (struct file *, int, int);
+	
 	ssize_t (*read_iter) (struct kiocb *, struct iov_iter *);
 	ssize_t (*write_iter) (struct kiocb *, struct iov_iter *);
 	int (*iopoll)(struct kiocb *kiocb, bool spin);
