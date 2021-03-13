@@ -1789,7 +1789,7 @@ struct file_operations {
 	ssize_t (*write) (struct file *, const char __user *, size_t, loff_t *);
 	
 	//jw migrate operation
-	ssize_t (*migrate_file) (struct file *, int, int);
+	ssize_t (*migrate_file) (struct file *, size_t, loff_t*, int, int);
 	//ssize_t (*a) (struct file *, int, int);
 	
 	ssize_t (*read_iter) (struct kiocb *, struct iov_iter *);

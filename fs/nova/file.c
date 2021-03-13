@@ -972,30 +972,117 @@ static int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
 
 	return 0;
 }
-static ssize_t do_dax_file_migrate(struct file *filp, int from, int to)
+static ssize_t do_dax_file_migrate(struct file *filp, size_t len, loff_t *ppos, int from, int to)
 {
 	struct inode *inode = filp->f_mapping->host;
         struct super_block *sb = inode->i_sb;
         struct nova_inode_info *si = NOVA_I(inode);
         struct nova_inode_info_header *sih = &si->header;
         struct nova_file_write_entry *entry;
-	struct nova_inode *pi;
+	struct nova_file_write_entry *entryc, entry_copy;
 
+	struct nova_inode *pi;
+	char *kbuf;
+	//void *kbuf;
 	int cpuid = nova_get_cpuid(sb);
+
+	pgoff_t index, end_index;
+        unsigned long offset;
+        loff_t isize, pos;
+        size_t copied = 0, error = 0;
 
 	pi = nova_get_block(sb, sih->pi_addr);
         printk("[mig] log_tail : %lu\n", (unsigned long)pi->log_tail);
-	printk("cpuid : %d\n", cpuid);
+	printk("[mig] cpuid : %d\n", cpuid);
+	//printk("[mig] ppos : %ll\n", (long long)*ppos);
+	//printk("[mig] len : %lu\n", (unsigned long)len);
+	
+	pos = *ppos;
+        index = pos >> PAGE_SHIFT;
+        offset = pos & ~PAGE_MASK;
+	
+	printk("[mig] offset : %lu\n", offset);
 
-	return 21;
+	kbuf = kmalloc(len, GFP_KERNEL);
+	//kbuf=NULL;
+	
+	isize = i_size_read(inode);
+	if (len > isize - pos)
+                len = isize - pos;
+	
+	entryc = (metadata_csum == 0) ? entry : &entry_copy;
+
+        end_index = (isize - 1) >> PAGE_SHIFT;
+	
+	do{
+		unsigned long nr, left;
+                unsigned long nvmm;
+                void *dax_mem = NULL;
+                int zero = 0;
+
+                /* nr is the maximum number of bytes to copy from this page */
+                if (index >= end_index) {
+                        if (index > end_index)
+                                goto out;
+                        nr = ((isize - 1) & ~PAGE_MASK) + 1;
+                        if (nr <= offset)
+                                goto out;
+                }
+
+                entry = nova_get_write_entry(sb, sih, index);
+	
+		//jw test
+		if(entry)
+			printk("entry get!\n");
+
+		if (metadata_csum == 0)
+                        entryc = entry;
+                else if (!nova_verify_entry_csum(sb, entry, entryc))
+                        return -EIO;
+
+		if (entryc->reassigned == 0) {
+                        nr = (entryc->num_pages - (index - entryc->pgoff))
+                                * PAGE_SIZE;
+                }
+		else {
+                        nr = PAGE_SIZE;
+                }
+
+		//jw test
+		printk("nr : %lu\n", nr);
+
+                nvmm = get_nvmm(sb, sih, entryc, index);
+                dax_mem = nova_get_block(sb, (nvmm << PAGE_SHIFT));
+		
+		nr = nr - offset;
+                if (nr > len - copied)
+                        nr = len - copied;
+		
+		memcpy(kbuf + copied, dax_mem + offset, nr);
+
+		copied += nr;
+                offset += nr;
+                index += offset >> PAGE_SHIFT;
+                offset &= ~PAGE_MASK;
+
+	}while(copied<len);	
+
+out:
+        *ppos = pos + copied;
+        if (filp)
+                file_accessed(filp);
+	
+	printk("buf : %s\n", (char*)kbuf);
+
+	return copied;
 }
-static ssize_t nova_dax_file_migrate(struct file *filp, int from , int to)
+static ssize_t nova_dax_file_migrate(struct file *filp, size_t len, loff_t *ppos, int from , int to)
 {
 	struct inode *inode = filp->f_mapping->host;
         ssize_t res;
 
         inode_lock_shared(inode);
-        res = do_dax_file_migrate(filp, from, to);
+        res = do_dax_file_migrate(filp, len, ppos, from, to);
 	inode_unlock_shared(inode);
         
 	return res;

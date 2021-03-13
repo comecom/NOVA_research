@@ -570,17 +570,15 @@ static inline void file_pos_write(struct file *file, loff_t pos)
 }
 
 //jw migrate file
-ssize_t __vfs_migrate_file(struct file *file, int from, int to)
+ssize_t __vfs_migrate_file(struct file *file, size_t count, loff_t *pos, int from, int to)
 {
-	//printk("__vfs_migrate\n");
-
         if (file->f_op->migrate_file)
-                return file->f_op->migrate_file(file, from, to);
+                return file->f_op->migrate_file(file, count, pos, from, to);
         else
                 return -EINVAL;
 }
 
-ssize_t vfs_migrate_file(struct file *file, int from, int to)
+ssize_t vfs_migrate_file(struct file *file, size_t count, loff_t *pos, int from, int to)
 {
 	ssize_t ret;
 
@@ -590,21 +588,22 @@ ssize_t vfs_migrate_file(struct file *file, int from, int to)
 		return -EBADF;
 	if (!(file->f_mode & FMODE_CAN_READ))
 		return -EINVAL;
-	//if (unlikely(!access_ok(buf, count)))
-	//	return -EFAULT;
-
-	//ret = rw_verify_area(READ, file, pos, count);
-	ret = __vfs_migrate_file(file, from, to);
-	if (ret > 0) {
-		fsnotify_access(file);
-		add_rchar(current, ret);
+	
+	ret = rw_verify_area(READ, file, pos, count);
+	if(!ret){
+		if(count>MAX_RW_COUNT)
+			count = MAX_RW_COUNT;
+		ret = __vfs_migrate_file(file, count, pos, from, to);
+		if (ret > 0) {
+			fsnotify_access(file);
+			add_rchar(current, ret);
+		}
+		inc_syscr(current);
 	}
-	inc_syscr(current);
-
 	return ret;
 }
 
-ssize_t ksys_migrate_file(unsigned fd, int from, int to)
+ssize_t ksys_migrate_file(unsigned fd, size_t count, int from, int to)
 {	
 	struct fd f = fdget_pos(fd);
 
@@ -613,34 +612,19 @@ ssize_t ksys_migrate_file(unsigned fd, int from, int to)
 	ssize_t ret = -EBADF;
 
 	if (f.file) {
-		//loff_t pos = file_pos_read(f.file);
-		printk("ksys inside if\n");
-		ret = vfs_migrate_file(f.file, from, to);
+		loff_t pos = file_pos_read(f.file);
+		//printk("ksys inside if\n");
+		ret = vfs_migrate_file(f.file, count, &pos, from, to);
+		if(ret>=0)
+			file_pos_write(f.file, pos);
+		fdput_pos(f);
 	}
 	return ret;
-
-	/*if(filp){
-	  printk("hello file\n");
-	  if(filp->f_op->migrate_file){
-	  printk("[ksys]migration operation exist!\n");
-	//ssize_t filesize = 21;
-	//return filesize;
-	return filp->f_op->migrate_file(filp, from, to);
-	}
-	else{
-	printk("[ksys]no f_op->migrate_file");
-	return -EINVAL;
-	}
-	}
-	else{
-	printk("[ksys]no file\n");
-	return -EBADF;
-	}*/
 }
 
-SYSCALL_DEFINE3(migrate_file, int, fd, int, from, int, to)
+SYSCALL_DEFINE4(migrate_file, int, fd, size_t, count, int, from, int, to)
 {
-	return ksys_migrate_file(fd, from, to);
+	return ksys_migrate_file(fd, count, from, to);
 }
 
 ssize_t ksys_read(unsigned int fd, char __user *buf, size_t count)
