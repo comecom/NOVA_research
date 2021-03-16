@@ -509,6 +509,8 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 	if (!isize)
 		goto out;
 
+	printk("[read] isize : %lld\n", isize);
+
 	nova_dbgv("%s: inode %lu, offset %lld, count %lu, size %lld\n",
 		__func__, inode->i_ino,	pos, len, isize);
 
@@ -526,6 +528,8 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 
 	end_index = (isize - 1) >> PAGE_SHIFT;
 	do {
+		printk("[read] in do-while loop\n");
+
 		unsigned long nr, left;
 		unsigned long nvmm;
 		void *dax_mem = NULL;
@@ -541,6 +545,9 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 		}
 
 		entry = nova_get_write_entry(sb, sih, index);
+		if(entry)
+			printk("[read] entry get!\n");
+
 		if (unlikely(entry == NULL)) {
 			nova_dbgv("Required extent not found: pgoff %lu, inode size %lld\n",
 				index, isize);
@@ -572,6 +579,9 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 		nvmm = get_nvmm(sb, sih, entryc, index);
 		dax_mem = nova_get_block(sb, (nvmm << PAGE_SHIFT));
 		//dax_mem : PM addr of "target read block"
+
+		//jw test
+                printk("nr : %lu\n", nr);
 
 memcpy:
 		nr = nr - offset;
@@ -974,48 +984,59 @@ static int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
 }
 static ssize_t do_dax_file_migrate(struct file *filp, size_t len, loff_t *ppos, int from, int to)
 {
-	struct inode *inode = filp->f_mapping->host;
+ 	struct inode *inode = filp->f_mapping->host;
         struct super_block *sb = inode->i_sb;
         struct nova_inode_info *si = NOVA_I(inode);
         struct nova_inode_info_header *sih = &si->header;
         struct nova_file_write_entry *entry;
-	struct nova_file_write_entry *entryc, entry_copy;
-
-	struct nova_inode *pi;
-	char *kbuf;
-	//void *kbuf;
-	int cpuid = nova_get_cpuid(sb);
-
-	pgoff_t index, end_index;
+        struct nova_file_write_entry *entryc, entry_copy;
+        pgoff_t index, end_index;
         unsigned long offset;
         loff_t isize, pos;
         size_t copied = 0, error = 0;
 
-	pi = nova_get_block(sb, sih->pi_addr);
-        printk("[mig] log_tail : %lu\n", (unsigned long)pi->log_tail);
-	printk("[mig] cpuid : %d\n", cpuid);
-	//printk("[mig] ppos : %ll\n", (long long)*ppos);
-	//printk("[mig] len : %lu\n", (unsigned long)len);
-	
-	pos = *ppos;
+        //jw definition
+	char *kbuf = kmalloc(len, GFP_KERNEL);
+	void *kpointer = kbuf;
+
+        int cpuid, inode_loc;
+        struct nova_inode *pi;
+
+
+        INIT_TIMING(memcpy_time);
+
+        pos = *ppos;
         index = pos >> PAGE_SHIFT;
         offset = pos & ~PAGE_MASK;
-	
-	printk("[mig] offset : %lu\n", offset);
 
-	kbuf = kmalloc(len, GFP_KERNEL);
-	//kbuf=NULL;
-	
+        //jw
+        pi = nova_get_block(sb, sih->pi_addr);
+        printk("[mig] log_tail : %lu\n", (unsigned long)pi->log_tail);
+        cpuid = nova_get_cpuid(sb);
+
 	isize = i_size_read(inode);
-	if (len > isize - pos)
+        if (!isize)
+                goto out;
+
+        printk("[mig] isize : %lld\n", isize);
+
+        nova_dbgv("%s: inode %lu, offset %lld, count %lu, size %lld\n",
+                __func__, inode->i_ino, pos, len, isize);
+
+        if (len > isize - pos)
                 len = isize - pos;
-	
-	entryc = (metadata_csum == 0) ? entry : &entry_copy;
+
+        if (len <= 0)
+                goto out;
+
+        entryc = (metadata_csum == 0) ? entry : &entry_copy;
 
         end_index = (isize - 1) >> PAGE_SHIFT;
-	
-	do{
-		unsigned long nr, left;
+
+	do {
+                printk("[mig] in do-while loop\n");
+
+                unsigned long nr, left;
                 unsigned long nvmm;
                 void *dax_mem = NULL;
                 int zero = 0;
@@ -1030,51 +1051,106 @@ static ssize_t do_dax_file_migrate(struct file *filp, size_t len, loff_t *ppos, 
                 }
 
                 entry = nova_get_write_entry(sb, sih, index);
-	
-		//jw test
-		if(entry)
-			printk("entry get!\n");
+                if(entry)
+                        printk("[mig] entry get!\n");
 
-		if (metadata_csum == 0)
+                if (unlikely(entry == NULL)) {
+                        nova_dbgv("Required extent not found: pgoff %lu, inode size %lld\n",
+                                index, isize);
+                        nr = PAGE_SIZE;
+                        zero = 1;
+                        goto memcpy;
+                }
+
+                if (metadata_csum == 0)
                         entryc = entry;
                 else if (!nova_verify_entry_csum(sb, entry, entryc))
                         return -EIO;
 
-		if (entryc->reassigned == 0) {
+                /* Find contiguous blocks */
+                if (index < entryc->pgoff ||
+                        index - entryc->pgoff >= entryc->num_pages) {
+                        nova_err(sb, "%s ERROR: %lu, entry pgoff %llu, num %u, blocknr %llu\n",
+                                __func__, index, entry->pgoff,
+                                entry->num_pages, entry->block >> PAGE_SHIFT);
+                        return -EINVAL;
+                }
+                if (entryc->reassigned == 0) {
                         nr = (entryc->num_pages - (index - entryc->pgoff))
                                 * PAGE_SIZE;
-                }
-		else {
+                } else {
                         nr = PAGE_SIZE;
                 }
 
-		//jw test
-		printk("nr : %lu\n", nr);
-
                 nvmm = get_nvmm(sb, sih, entryc, index);
                 dax_mem = nova_get_block(sb, (nvmm << PAGE_SHIFT));
+
+		//jw test
+                printk("[mig] nr : %lu\n", nr);
 		
-		nr = nr - offset;
+		printk("[mig] char : %c\n", *(char*)dax_mem);
+memcpy:
+                nr = nr - offset;
                 if (nr > len - copied)
                         nr = len - copied;
-		
-		memcpy(kbuf + copied, dax_mem + offset, nr);
+
+                if ((!zero) && (data_csum > 0)) {
+                        if (nova_find_pgoff_in_vma(inode, index))
+                                goto skip_verify;
+
+                        if (!nova_verify_data_csum(sb, sih, nvmm, offset, nr)) {
+                                nova_err(sb, "%s: nova data checksum and recovery fail! inode %lu, offset %lu, entry pgoff %lu, %u pages, pgoff %lu\n",
+                                         __func__, inode->i_ino, offset,
+                                         entry->pgoff, entry->num_pages, index);
+                                error = -EIO;
+                                goto out;
+                        }
+                }
+skip_verify:
+                NOVA_START_TIMING(memcpy_r_nvmm_t, memcpy_time);
+
+                //copy to usr buf
+		/*if (!zero)
+                        left = __copy_to_user(buf + copied, dax_mem + offset, nr);
+                else
+                        left = __clear_user(buf + copied, nr);
+		*/
+	
+		//jw memcpy to kernel buffer	
+		memcpy(kpointer+copied, dax_mem+offset, nr);	
+
+                NOVA_END_TIMING(memcpy_r_nvmm_t, memcpy_time);
+
+                /*if (left) {
+                        nova_dbg("%s ERROR!: bytes %lu, left %lu\n",
+                                __func__, nr, left);
+                        error = -EFAULT;
+                        goto out;
+                }*/
+
+                /*copied += (nr - left);
+                offset += (nr - left);
+                index += offset >> PAGE_SHIFT;
+                offset &= ~PAGE_MASK;*/
 
 		copied += nr;
                 offset += nr;
                 index += offset >> PAGE_SHIFT;
                 offset &= ~PAGE_MASK;
 
-	}while(copied<len);	
+        } while (copied < len);
 
 out:
         *ppos = pos + copied;
         if (filp)
                 file_accessed(filp);
-	
-	printk("buf : %s\n", (char*)kbuf);
 
-	return copied;
+        NOVA_STATS_ADD(read_bytes, copied);
+
+        nova_dbgv("%s returned %zu\n", __func__, copied);
+	printk("kbuf : %s\n", kbuf);
+
+	return copied ? copied : error;
 }
 static ssize_t nova_dax_file_migrate(struct file *filp, size_t len, loff_t *ppos, int from , int to)
 {
