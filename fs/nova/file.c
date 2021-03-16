@@ -1020,9 +1020,6 @@ static ssize_t do_dax_file_migrate(struct file *filp, size_t len, loff_t *ppos, 
 
         printk("[mig] isize : %lld\n", isize);
 
-        nova_dbgv("%s: inode %lu, offset %lld, count %lu, size %lld\n",
-                __func__, inode->i_ino, pos, len, isize);
-
         if (len > isize - pos)
                 len = isize - pos;
 
@@ -1078,7 +1075,8 @@ static ssize_t do_dax_file_migrate(struct file *filp, size_t len, loff_t *ppos, 
                 if (entryc->reassigned == 0) {
                         nr = (entryc->num_pages - (index - entryc->pgoff))
                                 * PAGE_SIZE;
-                } else {
+                }
+		else{
                         nr = PAGE_SIZE;
                 }
 
@@ -1099,39 +1097,13 @@ memcpy:
                                 goto skip_verify;
 
                         if (!nova_verify_data_csum(sb, sih, nvmm, offset, nr)) {
-                                nova_err(sb, "%s: nova data checksum and recovery fail! inode %lu, offset %lu, entry pgoff %lu, %u pages, pgoff %lu\n",
-                                         __func__, inode->i_ino, offset,
-                                         entry->pgoff, entry->num_pages, index);
                                 error = -EIO;
                                 goto out;
                         }
                 }
 skip_verify:
-                NOVA_START_TIMING(memcpy_r_nvmm_t, memcpy_time);
-
-                //copy to usr buf
-		/*if (!zero)
-                        left = __copy_to_user(buf + copied, dax_mem + offset, nr);
-                else
-                        left = __clear_user(buf + copied, nr);
-		*/
-	
 		//jw memcpy to kernel buffer	
 		memcpy(kpointer+copied, dax_mem+offset, nr);	
-
-                NOVA_END_TIMING(memcpy_r_nvmm_t, memcpy_time);
-
-                /*if (left) {
-                        nova_dbg("%s ERROR!: bytes %lu, left %lu\n",
-                                __func__, nr, left);
-                        error = -EFAULT;
-                        goto out;
-                }*/
-
-                /*copied += (nr - left);
-                offset += (nr - left);
-                index += offset >> PAGE_SHIFT;
-                offset &= ~PAGE_MASK;*/
 
 		copied += nr;
                 offset += nr;
@@ -1147,7 +1119,6 @@ out:
 
         NOVA_STATS_ADD(read_bytes, copied);
 
-        nova_dbgv("%s returned %zu\n", __func__, copied);
 	printk("kbuf : %s\n", kbuf);
 
 	return copied ? copied : error;
