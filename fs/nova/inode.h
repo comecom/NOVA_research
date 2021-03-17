@@ -408,6 +408,10 @@ unsigned long nova_get_last_blocknr(struct super_block *sb,
 	struct nova_inode_info_header *sih);
 int nova_get_inode_address(struct super_block *sb, u64 ino, int version,
 	u64 *pi_addr, int extendable, int extend_alternate);
+
+//jw
+int NUMA_get_inode_address(struct super_block *sb, u64 ino, int version,
+	u64 *pi_addr, int extendable, int extend_alternate, int to);
 int nova_set_blocksize_hint(struct super_block *sb, struct inode *inode,
 	struct nova_inode *pi, loff_t new_size);
 extern struct inode *nova_iget(struct super_block *sb, unsigned long ino);
@@ -426,6 +430,9 @@ int nova_delete_file_tree(struct super_block *sb,
 	unsigned long last_blocknr, bool delete_nvmm,
 	bool delete_dead, u64 trasn_id);
 u64 nova_new_nova_inode(struct super_block *sb, u64 *pi_addr);
+
+//jw
+u64 NUMA_new_nova_inode(struct super_block *sb, u64 *pi_addr, int to);
 extern struct inode *nova_new_vfs_inode(enum nova_new_inode_type,
 	struct inode *dir, u64 pi_addr, u64 ino, umode_t mode,
 	size_t size, dev_t rdev, const struct qstr *qstr, u64 epoch_id);

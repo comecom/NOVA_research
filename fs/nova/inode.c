@@ -254,6 +254,100 @@ int nova_get_inode_address(struct super_block *sb, u64 ino, int version,
 	return 0;
 }
 
+//jw NUMA aware get address
+int NUMA_get_inode_address(struct super_block *sb, u64 ino, int version,
+        u64 *pi_addr, int extendable, int extend_alternate, int to)
+{
+        struct nova_sb_info *sbi = NOVA_SB(sb);
+        struct nova_inode_info_header sih;
+        struct inode_table *inode_table;
+        unsigned int data_bits;
+        unsigned int num_inodes_bits;
+        u64 curr;
+        unsigned int superpage_count;
+        u64 alternate_pi_addr = 0;
+        u64 internal_ino;
+        int cpuid;
+        int extended = 0;
+        unsigned int index;
+        unsigned int i = 0;
+        unsigned long blocknr;
+        unsigned long curr_addr;
+        int allocated;
+
+        if (ino < NOVA_NORMAL_INODE_START) {
+                *pi_addr = nova_get_reserved_inode_addr(sb, ino);
+                return 0;
+        }
+
+        sih.ino = NOVA_INODETABLE_INO;
+        sih.i_blk_type = NOVA_BLOCK_TYPE_2M;
+        data_bits = blk_type_to_shift[sih.i_blk_type];
+        num_inodes_bits = data_bits - NOVA_INODE_BITS;
+
+	if(to == 0){
+		cpuid = ino % (sbi->cpus/2);
+	}
+	else{//to = 1
+		cpuid = ino % (sbi->cpus/2) + (sbi->cpus/2);
+	}
+
+        //cpuid = ino % sbi->cpus;
+        
+	internal_ino = ino / sbi->cpus;
+
+        inode_table = nova_get_inode_table(sb, version, cpuid);
+        superpage_count = internal_ino >> num_inodes_bits;
+        index = internal_ino & ((1 << num_inodes_bits) - 1);
+
+        curr = inode_table->log_head;
+        if (curr == 0)
+                return -EINVAL;
+
+        for (i = 0; i < superpage_count; i++) {
+                if (curr == 0)
+                        return -EINVAL;
+
+                curr_addr = (unsigned long)nova_get_block(sb, curr);
+                /* Next page pointer in the last 8 bytes of the superpage */
+                curr_addr += nova_inode_blk_size(&sih) - 8;
+                curr = *(u64 *)(curr_addr);
+ 		
+		if (curr == 0) {
+                        if (extendable == 0)
+                                return -EINVAL;
+
+                        extended = 1;
+
+                        allocated = nova_new_log_blocks(sb, &sih, &blocknr,
+                                1, ALLOC_INIT_ZERO, cpuid,
+                                version ? ALLOC_FROM_TAIL : ALLOC_FROM_HEAD);
+
+                        if (allocated != 1)
+                                return allocated;
+
+                        curr = nova_get_block_off(sb, blocknr,
+                                                NOVA_BLOCK_TYPE_2M);
+                        nova_memunlock_range(sb, (void *)curr_addr,
+                                                CACHELINE_SIZE);
+                        *(u64 *)(curr_addr) = curr;
+                        nova_memlock_range(sb, (void *)curr_addr,
+                                                CACHELINE_SIZE);
+                        nova_flush_buffer((void *)curr_addr,
+                                                NOVA_INODE_SIZE, 1);
+                }
+        }
+
+        /* Extend alternate inode table */
+        /*if (extended && extend_alternate && metadata_csum)
+                nova_get_inode_address(sb, ino, version + 1,
+                                        &alternate_pi_addr, extendable, 0);*/
+
+        *pi_addr = curr + index * NOVA_INODE_SIZE;
+
+        return 0;
+}
+
 int nova_get_alter_inode_address(struct super_block *sb, u64 ino,
 	u64 *alter_pi_addr)
 {
@@ -1045,6 +1139,48 @@ u64 nova_new_nova_inode(struct super_block *sb, u64 *pi_addr)
 
 	NOVA_END_TIMING(new_nova_inode_t, new_inode_time);
 	return ino;
+}
+//jw numa aware inode
+u64 NUMA_new_nova_inode(struct super_block *sb, u64 *pi_addr, int to)
+{
+        struct nova_sb_info *sbi = NOVA_SB(sb);
+        struct inode_map *inode_map;
+        unsigned long free_ino = 0;
+        int map_id;
+        u64 ino = 0;
+        int ret;
+
+	if(to == 0)
+		map_id = (sbi->map_id)%(sbi->cpus/2);//0~27
+	else map_id = (sbi->map_id)%(sbi->cpus/2) + (sbi->cpus/2);//28~55
+
+        //map_id = sbi->map_id;
+        sbi->map_id = (sbi->map_id + 1) % sbi->cpus;
+
+        inode_map = &sbi->inode_maps[map_id];
+
+        mutex_lock(&inode_map->inode_table_mutex);
+        ret = nova_alloc_unused_inode(sb, map_id, &free_ino);
+        if (ret) {
+                nova_dbg("%s: alloc inode number failed %d\n", __func__, ret);
+                mutex_unlock(&inode_map->inode_table_mutex);
+                return 0;
+        }
+
+        //ret = nova_get_inode_address(sb, free_ino, 0, pi_addr, 1, 1);
+        ret = NUMA_get_inode_address(sb, free_ino, 0, pi_addr, 1, 1, to);
+        
+	if (ret) {
+                nova_dbg("%s: get inode address failed %d\n", __func__, ret);
+                mutex_unlock(&inode_map->inode_table_mutex);
+                return 0;
+        }
+
+        mutex_unlock(&inode_map->inode_table_mutex);
+
+        ino = free_ino;
+
+        return ino;
 }
 
 struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,

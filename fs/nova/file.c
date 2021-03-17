@@ -481,21 +481,23 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 
 	//jw
 	pi = nova_get_block(sb, sih->pi_addr);
-	printk("[read] log_tail : %lu\n", (unsigned long)pi->log_tail);
+	//printk("[read] log_tail : %lu\n", (unsigned long)pi->log_tail);
+	printk("[read] pi addr : %llu\n", (unsigned long long)pi);
+	
 	cpuid = nova_get_cpuid(sb);
 	
 
 	// pmem size : about 800G
-	if((unsigned long)pi->log_tail<800000000000)inode_loc = 0;
+	if((unsigned long long)pi->log_tail<800000000000)inode_loc = 0;
 	else inode_loc = 1;
 	
 	if(cpuid/28 == inode_loc){
 		(pi->local) += 1;
-		printk("local access : %lu\n", (unsigned long)pi->local);
+		printk("local access : %llu\n", (unsigned long long)pi->local);
 	}
 	else{
 		(pi->remote) += 1;
-		printk("remote access : %lu\n", (unsigned long)pi->remote);
+		printk("remote access : %llu\n", (unsigned long long)pi->remote);
 		if((unsigned long)pi->remote > 5)
 			printk("too many remote access!\n");
 	}
@@ -528,7 +530,7 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 
 	end_index = (isize - 1) >> PAGE_SHIFT;
 	do {
-		printk("[read] in do-while loop\n");
+		//printk("[read] in do-while loop\n");
 
 		unsigned long nr, left;
 		unsigned long nvmm;
@@ -545,8 +547,10 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 		}
 
 		entry = nova_get_write_entry(sb, sih, index);
-		if(entry)
-			printk("[read] entry get!\n");
+		
+		//jw
+		//if(entry)
+			//printk("[read] entry get!\n");
 
 		if (unlikely(entry == NULL)) {
 			nova_dbgv("Required extent not found: pgoff %lu, inode size %lld\n",
@@ -581,7 +585,7 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 		//dax_mem : PM addr of "target read block"
 
 		//jw test
-                printk("nr : %lu\n", nr);
+                //printk("nr : %lu\n", nr);
 
 memcpy:
 		nr = nr - offset;
@@ -711,7 +715,8 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 	pi = nova_get_block(sb, sih->pi_addr);
 	
 	//jw local&remote init
-	printk("[write] log_tail : %lu\n", (unsigned long)pi->log_tail);
+	//printk("[write] log_tail : %lu\n", (unsigned long)pi->log_tail);
+ 	printk("[write] pi addr : %llu\n", (unsigned long long)pi);
 
 	pi->local = 0;
 	pi->remote = 0;
@@ -998,22 +1003,31 @@ static ssize_t do_dax_file_migrate(struct file *filp, size_t len, loff_t *ppos, 
         //jw definition
 	char *kbuf = kmalloc(len, GFP_KERNEL);
 	void *kpointer = kbuf;
-
+	
         int cpuid, inode_loc;
+
         struct nova_inode *pi;
-
-
-        INIT_TIMING(memcpy_time);
+        struct nova_inode *pi2;
 
         pos = *ppos;
         index = pos >> PAGE_SHIFT;
         offset = pos & ~PAGE_MASK;
 
-        //jw
-        pi = nova_get_block(sb, sih->pi_addr);
-        printk("[mig] log_tail : %lu\n", (unsigned long)pi->log_tail);
         cpuid = nova_get_cpuid(sb);
+        
+	//jw
+        pi = nova_get_block(sb, sih->pi_addr);
+	
+	//void*pp = pi;
+        //printk("[mig] log_tail : %lu\n", (unsigned long)pi->log_tail);
+	printk("[mig] cpu : %d\n", cpuid);	
+	printk("[mig] sih->pi_addr : %lu\n", sih->pi_addr);
+	printk("[mig] pi addr : %llu\n", (unsigned long long)pi);
+	printk("[mig] pi addr : %llu\n", (unsigned long long)pi);
+	printk("[mig] sih->ino : %lu\n", sih->ino);
+	printk("[mig] pi ino : %llu\n", (unsigned long long)pi->nova_ino);
 
+	/**************READ TO KERNEL BUFFER*****************/
 	isize = i_size_read(inode);
         if (!isize)
                 goto out;
@@ -1031,7 +1045,7 @@ static ssize_t do_dax_file_migrate(struct file *filp, size_t len, loff_t *ppos, 
         end_index = (isize - 1) >> PAGE_SHIFT;
 
 	do {
-                printk("[mig] in do-while loop\n");
+                //printk("[mig] in do-while loop\n");
 
                 unsigned long nr, left;
                 unsigned long nvmm;
@@ -1048,8 +1062,10 @@ static ssize_t do_dax_file_migrate(struct file *filp, size_t len, loff_t *ppos, 
                 }
 
                 entry = nova_get_write_entry(sb, sih, index);
-                if(entry)
-                        printk("[mig] entry get!\n");
+                
+		//jw
+		//if(entry)
+                        //printk("[mig] entry get!\n");
 
                 if (unlikely(entry == NULL)) {
                         nova_dbgv("Required extent not found: pgoff %lu, inode size %lld\n",
@@ -1084,9 +1100,9 @@ static ssize_t do_dax_file_migrate(struct file *filp, size_t len, loff_t *ppos, 
                 dax_mem = nova_get_block(sb, (nvmm << PAGE_SHIFT));
 
 		//jw test
-                printk("[mig] nr : %lu\n", nr);
+                //printk("[mig] nr : %lu\n", nr);
 		
-		printk("[mig] char : %c\n", *(char*)dax_mem);
+		//printk("[mig] char : %c\n", *(char*)dax_mem);
 memcpy:
                 nr = nr - offset;
                 if (nr > len - copied)
@@ -1121,7 +1137,22 @@ out:
 
 	printk("kbuf : %s\n", kbuf);
 
+	uint64_t ino;
+	uint64_t addr = 0;
+
+	ino = NUMA_new_nova_inode(sb, &addr, to);
+	printk("[mig] ino : %llu\n", ino);
+	printk("[mig] addr : %llu\n", addr);
+
+	pi2 = nova_get_block(sb, addr);
+	
+	printk("[mig] after pi addr : %llu\n", (unsigned long long)pi2);
+	printk("[mig] after ino : %llu\n", (unsigned long long)pi2->nova_ino);
+	printk("------------------------------------------------\n");
+
 	return copied ? copied : error;
+	
+	//copied, 
 }
 static ssize_t nova_dax_file_migrate(struct file *filp, size_t len, loff_t *ppos, int from , int to)
 {
