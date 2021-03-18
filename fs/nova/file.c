@@ -453,11 +453,11 @@ out_unlock:
 }
 
 //jw
-static int nova_get_file_loc(struct nova_inode *pi)
+static int nova_get_file_loc(void *addr)
 {
-	unsigned long long pp = (unsigned long long)pi;
+	unsigned long long pp = (unsigned long long)addr;
 
-	if(pi<18446625635492167680)
+	if(pp < 18446616652568068096)
 		return 0;
 	else return 1;
 }
@@ -1156,7 +1156,9 @@ out:
 
 	pi2 = nova_get_block(sb, addr);
 	int new_loc = nova_get_file_loc(pi2);
-	printk("[mig] after pi addr : %llu\n", (unsigned long long)pi2);
+	pi2->nova_ino = ino;
+
+	printk("[mig] pi2 addr : %llu\n", (unsigned long long)pi2);
 	printk("[mig] after ino : %llu\n", (unsigned long long)pi2->nova_ino);
 	printk("[mig] after loc : NODE%d\n", new_loc); 
 
@@ -1233,7 +1235,7 @@ out:
 			bytes = count;
 
 		kmem = nova_get_block(inode->i_sb, nova_get_block_off(sb, blocknr, sih->i_blk_type));
-		
+
 		//jw test
 		printk("[mig] kmem : %llu\n", (unsigned long long)kmem);
 
@@ -1253,7 +1255,7 @@ out:
 		//NOVA_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
 		copied = bytes;
-		
+
 		//jw test
 		printk("[mig] copied : %lu\n", copied);
 		printk("[mig] kstr : %s\n", (char*)kmem);
@@ -1262,6 +1264,21 @@ out:
 			file_size = cpu_to_le64(pos + copied);
 		else
 			file_size = cpu_to_le64(inode->i_size);
+		
+		//jw init entry
+		nova_init_file_write_entry(sb, sih, &entry_data, epoch_id,
+				start_blk, allocated, blocknr, time,
+				file_size);
+
+		//jw append entry
+		ret = nova_append_file_write_entry(sb, pi2, inode,
+				&entry_data, &update);
+		if (ret) {
+			nova_dbg("%s: append inode entry failed\n", __func__);
+			ret = -ENOSPC;
+			goto out;
+		}
+
 
 		if (copied > 0) {
 			status = copied;
@@ -1277,8 +1294,6 @@ out:
 
 		if (begin_tail == 0)
 			begin_tail = update.curr_entry;
-
-
 	}
 
 	printk("------------------------------------------------\n");
