@@ -129,17 +129,17 @@ u64 nova_get_addr_off_for_NUMA(struct nova_sb_info *sbi, void *addr)
 
 void *nova_get_block_for_NUMA(struct super_block *sb, u64 block)
 {
-	int i, chk;
-	int cpuid = nova_get_cpuid(sb);
+	int i;
+	//int cpuid = nova_get_cpuid(sb);
 	u64 range_begin = 0;
 	u64 range_end = 0;
 
 	//jw
 	//printk("addr param : %llu\n", block);
-	/*printk("virt_addr[0] : %lu\n", multi_pm[0]->virt_addr);
-	printk("virt_size[0] : %llu\n", multi_pm[0]->size);
-	printk("virt_addr[1] : %lu\n", multi_pm[1]->virt_addr);
-	printk("virt_size[1] : %llu\n", multi_pm[1]->size);*/
+	printk("virt_addr[0] : %llu\n", (unsigned long long)multi_pm[0]->virt_addr);
+	printk("virt_size[0] : %lu\n", multi_pm[0]->size);
+	printk("virt_addr[1] : %llu\n", (unsigned long long)multi_pm[1]->virt_addr);
+	printk("virt_size[1] : %lu\n", multi_pm[1]->size);
 	for(i=0; i<number_of_devices; i++)
 	{
 		//jw
@@ -157,3 +157,19 @@ void *nova_get_block_for_NUMA(struct super_block *sb, u64 block)
 	nova_dbg("%s: Fail to convert address\n", __func__);
 	return -1;
 }
+
+//jw get location of file (which node)
+/*int nova_get_file_loc(struct nova_inode *pi)
+{
+	unsigned long long pp = (unsigned long long)pi;
+	int i;
+
+	for(i=0;i<number_of_devices;i++){
+		unsigned long long start = (unsigned long long)multi_pm[i]->virt_addr;
+		unsigned long long end = start + (unsigned long long)multi_pm[i]->size;
+
+		if(start<=pp && pp<end)
+			return i;	
+	}
+	return -1;
+}*/

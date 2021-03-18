@@ -866,6 +866,37 @@ static int nova_get_candidate_free_list(struct super_block *sb)
 	return cpuid;
 }
 
+//jw get free list per NODE (0 or 1)
+static int nova_get_candidate_free_list_per_node(struct super_block *sb, int cpuid)
+{
+        struct nova_sb_info *sbi = NOVA_SB(sb);
+        struct free_list *free_list;
+        //int cpuid = 0;
+        int num_free_blocks = 0;
+        int i;
+
+	if(cpuid < (sbi->cpus)/2){//NODE 0
+		for (i = 0; i < (sbi->cpus)/2; i++) {
+                	free_list = nova_get_free_list(sb, i);
+                	if (free_list->num_free_blocks > num_free_blocks) {
+                        	cpuid = i;
+                        	num_free_blocks = free_list->num_free_blocks;
+                	}
+        	}	
+	}
+	else{			//NODE 1
+		for (i = (sbi->cpus)/2; i < sbi->cpus; i++) {
+                	free_list = nova_get_free_list(sb, i);
+                	if (free_list->num_free_blocks > num_free_blocks) {
+                        	cpuid = i;
+                       		num_free_blocks = free_list->num_free_blocks;
+                	}
+        	}
+	}
+        
+	return cpuid;
+}
+
 static int nova_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	unsigned int num, unsigned short btype, int zero,
 	enum alloc_type atype, int cpuid, enum nova_alloc_direction from_tail)
@@ -903,7 +934,10 @@ retry:
 			goto alloc;
 
 		spin_unlock(&free_list->s_lock);
-		cpuid = nova_get_candidate_free_list(sb);
+		//cpuid = nova_get_candidate_free_list(sb);
+		
+		//jw
+		cpuid = nova_get_candidate_free_list_per_node(sb, cpuid);
 		retried++;
 		goto retry;
 	}
