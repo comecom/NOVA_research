@@ -141,6 +141,9 @@ void *nova_get_block_for_NUMA(struct super_block *sb, u64 block)
 	printk("virt_addr[1] : %llu\n", (unsigned long long)multi_pm[1]->virt_addr);
 	printk("virt_size[1] : %lu\n", multi_pm[1]->size);
 	*/
+
+	//printk("virt_addr[1] : %llu\n", (unsigned long long)multi_pm[1]->virt_addr);
+	
 	for(i=0; i<number_of_devices; i++)
 	{
 		//jw

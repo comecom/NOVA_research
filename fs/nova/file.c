@@ -457,7 +457,7 @@ static int nova_get_file_loc(void *addr)
 {
 	unsigned long long pp = (unsigned long long)addr;
 
-	if(pp < 18446616652568068096)
+	if(pp < 18446616489359310848)
 		return 0;
 	else return 1;
 }
@@ -489,15 +489,17 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
 
 	//jw
 	pi = nova_get_block(sb, sih->pi_addr);
-	//printk("[read] log_tail : %lu\n", (unsigned long)pi->log_tail);
+	printk("[read] -----------------------------------------------------\n");
+	printk("[read] sih addr : %llu\n", (unsigned long long)sih);
+	printk("[read] sih->pi_addr : %llu\n", (unsigned long long)sih->pi_addr);
 	printk("[read] pi addr : %llu\n", (unsigned long long)pi);
 
 	cpuid = nova_get_cpuid(sb);
 
-
+	inode_loc = nova_get_file_loc(pi); 
 	// pmem size : about 800G
-	if((unsigned long long)pi->log_tail<800000000000)inode_loc = 0;
-	else inode_loc = 1;
+	//if((unsigned long long)pi->log_tail<800000000000)inode_loc = 0;
+	//else inode_loc = 1;
 
 	if(cpuid/28 == inode_loc){
 		(pi->local) += 1;
@@ -509,7 +511,7 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
 		if((unsigned long)pi->remote > 5)
 			printk("too many remote access!\n");
 	}
-
+	
 	if (!access_ok(buf, len)) {
 		error = -EFAULT;
 		goto out;
@@ -1019,9 +1021,11 @@ static ssize_t do_dax_file_migrate(struct file *filp, size_t len, loff_t *ppos, 
 	int origin_loc = nova_get_file_loc(pi);	
 
 	//jw test
+	printk("[mig] -----------------------------------------------\n");
 	printk("[mig] cpu : %d\n", cpuid);	
+	printk("[mig] inode addr : %llu\n", (unsigned long long)inode);
+	printk("[mig] sih addr : %llu\n", (unsigned long long)sih);
 	printk("[mig] sih->pi_addr : %lu\n", sih->pi_addr);
-	printk("[mig] pi addr : %llu\n", (unsigned long long)pi);
 	printk("[mig] pi addr : %llu\n", (unsigned long long)pi);
 	printk("[mig] sih->ino : %lu\n", sih->ino);
 	printk("[mig] pi ino : %llu\n", (unsigned long long)pi->nova_ino);
@@ -1146,22 +1150,35 @@ out:
 
 	printk("kbuf : %s\n", kbuf);
 
+	int kbuf_ret = copied;
 	/*************************MAKE INODE**************************/
-	uint64_t ino;
-	uint64_t addr = 0;
+	
+	printk("[mig] ----------------------------------------------\n");
+	u64 addr = 0, ino;
+	
+	struct inode *inode2 = new_inode(sb);
+	struct nova_inode_info *si2 = NOVA_I(inode2);
+	struct nova_inode_info_header *sih2 = &si2->header;
+	inode2->i_mode = inode->i_mode;
+	inode2->i_size = inode->i_size;
+	nova_init_header(sb, sih2, inode2->i_mode);
 
 	ino = NUMA_new_nova_inode(sb, &addr, to);
-	printk("[mig] ino : %llu\n", ino);
-	printk("[mig] addr : %llu\n", addr);
 
+	sih2->pi_addr = addr;
 	pi2 = nova_get_block(sb, addr);
 	int new_loc = nova_get_file_loc(pi2);
+	
 	pi2->nova_ino = ino;
+	sih2->ino = ino;
+	inode2->i_ino = ino;
 
+	printk("[mig] inode2 addr : %llu\n", (unsigned long long)inode2);
+	printk("[mig] sih2 addr : %llu\n", (unsigned long long)sih2);
+	printk("[mig] sih2->pi_addr : %lu\n", sih2->pi_addr);
 	printk("[mig] pi2 addr : %llu\n", (unsigned long long)pi2);
-	printk("[mig] after ino : %llu\n", (unsigned long long)pi2->nova_ino);
-	printk("[mig] after loc : NODE%d\n", new_loc); 
-
+	//printk("[mig] pi2 ino : %llu\n", (unsigned long long)pi2->nova_ino);
+	printk("[mig] loc : NODE%d\n", new_loc);
 
 	/*************************WRITE DATA**************************/
 	struct nova_file_write_entry entry_data;
@@ -1194,9 +1211,9 @@ out:
 	total_blocks = num_blocks;
 	start_blk = pos >> sb->s_blocksize_bits;
 
-	if (nova_check_overlap_vmas(sb, sih, start_blk, num_blocks)) {
+	if (nova_check_overlap_vmas(sb, sih2, start_blk, num_blocks)) {
 		nova_dbgv("COW write overlaps with vma: inode %lu, pgoff %lu, %lu blocks\n",
-				inode->i_ino, start_blk, num_blocks);
+				inode2->i_ino, start_blk, num_blocks);
 		NOVA_STATS_ADD(cow_overlap_mmap, 1);
 		try_inplace = 1;
 		ret = -EACCES;
@@ -1209,21 +1226,25 @@ out:
 	if (ret)
 		goto final;
 
-	inode->i_ctime = inode->i_mtime = current_time(inode);
-	time = current_time(inode).tv_sec;
+	inode2->i_ctime = inode2->i_mtime = current_time(inode2);
+	time = current_time(inode2).tv_sec;
 
 	epoch_id = nova_get_epoch_id(sb);
-	update.tail = sih->log_tail;
-	update.alter_tail = sih->alter_log_tail;
 
+	//update to sih2
+	update.tail = sih2->log_tail;
+	update.alter_tail = sih2->alter_log_tail;
+
+	printk("[mig] ----------------------------------------------------\n");
 	while(num_blocks > 0){
-		offset = pos & (nova_inode_blk_size(sih) - 1);
+		offset = pos & (nova_inode_blk_size(sih2) - 1);
 		start_blk = pos >> sb->s_blocksize_bits;
 
-		int target_cpu = to * 55; // NODE0->cpu0, NODE1->cpu55
+		int target_cpu = to * 28; // NODE0->cpu0, NODE1->cpu55
+	
 
 		/* don't zero-out the allocated blocks */
-		allocated = nova_new_data_blocks(sb, sih, &blocknr, start_blk,
+		allocated = nova_new_data_blocks(sb, sih2, &blocknr, start_blk,
 				num_blocks, ALLOC_NO_INIT, target_cpu, ALLOC_FROM_HEAD);
 
 		//jw test
@@ -1234,13 +1255,13 @@ out:
 		if (bytes > count)
 			bytes = count;
 
-		kmem = nova_get_block(inode->i_sb, nova_get_block_off(sb, blocknr, sih->i_blk_type));
+		kmem = nova_get_block(inode2->i_sb, nova_get_block_off(sb, blocknr, sih2->i_blk_type));
 
 		//jw test
 		printk("[mig] kmem : %llu\n", (unsigned long long)kmem);
 
 		if (offset || ((offset + bytes) & (PAGE_SIZE - 1)) != 0)  {
-			ret = nova_handle_head_tail_blocks(sb, inode, pos, bytes, kmem);
+			ret = nova_handle_head_tail_blocks(sb, inode2, pos, bytes, kmem);
 
 			if (ret)
 				goto final;
@@ -1260,23 +1281,23 @@ out:
 		printk("[mig] copied : %lu\n", copied);
 		printk("[mig] kstr : %s\n", (char*)kmem);
 
-		if (pos + copied > inode->i_size)
+		if (pos + copied > inode2->i_size)
 			file_size = cpu_to_le64(pos + copied);
 		else
-			file_size = cpu_to_le64(inode->i_size);
+			file_size = cpu_to_le64(inode2->i_size);
 		
 		//jw init entry
-		nova_init_file_write_entry(sb, sih, &entry_data, epoch_id,
+		nova_init_file_write_entry(sb, sih2, &entry_data, epoch_id,
 				start_blk, allocated, blocknr, time,
 				file_size);
 
 		//jw append entry
-		ret = nova_append_file_write_entry(sb, pi2, inode,
+		ret = nova_append_file_write_entry(sb, pi2, inode2,
 				&entry_data, &update);
 		if (ret) {
 			nova_dbg("%s: append inode entry failed\n", __func__);
 			ret = -ENOSPC;
-			goto out;
+			goto final;
 		}
 
 
@@ -1295,12 +1316,34 @@ out:
 		if (begin_tail == 0)
 			begin_tail = update.curr_entry;
 	}
+	
+	data_bits = blk_type_to_shift[sih2->i_blk_type];
+        sih2->i_blocks += (total_blocks << (data_bits - sb->s_blocksize_bits));
 
-	printk("------------------------------------------------\n");
+	nova_memunlock_inode(sb, pi2);
+        nova_update_inode(sb, inode2, pi2, &update, 1);
+        nova_memlock_inode(sb, pi2);
+
+	ret = nova_reassign_file_tree(sb, sih2, begin_tail);
+
+       	if (ret)
+                goto final;
+
+        inode2->i_blocks = sih2->i_blocks;
+
+	if(written == kbuf_ret)	
+		ret = written;
+
+	if (pos > inode2->i_size) {
+                i_size_write(inode2, pos);
+                sih2->i_size = pos;
+        }
+
+        sih2->trans_id++;
 
 final:
 	if (ret < 0)
-		nova_cleanup_incomplete_write(sb, sih, blocknr, allocated,
+		nova_cleanup_incomplete_write(sb, sih2, blocknr, allocated,
 				begin_tail, update.tail);
 
 	if (try_inplace){
@@ -1308,9 +1351,21 @@ final:
 		printk("try_inplace set!\n");
 	}
 
-	return copied ? copied : error;
 
-	//copied, 
+	kfree(kbuf);
+	pi2->local = 0;
+	pi2->remote = 0;
+
+	/*************************LINK TO filp*****************************/
+	
+	//filp->f_mapping->host = inode2;
+	
+	/************************Garbage Collection************************/
+
+	printk("------------------------------------------------\n");
+
+	return copied ? copied : error;
+	//return ret ? ret : error;
 }
 static ssize_t nova_dax_file_migrate(struct file *filp, size_t len, loff_t *ppos, int from , int to)
 {
