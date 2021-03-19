@@ -1358,7 +1358,7 @@ final:
 
 	/*************************LINK TO filp*****************************/
 	
-	//filp->f_mapping->host = inode2;
+	filp->f_mapping->host = inode2;
 	
 	/************************Garbage Collection************************/
 
