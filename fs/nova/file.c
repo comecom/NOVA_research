@@ -486,9 +486,11 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
 	//jw
 	pi = nova_get_block(sb, sih->pi_addr);
 	printk("[read] -----------------------------------------------------\n");
+	printk("[read] sb : %llu\n", (unsigned long long)sb);
 	printk("[read] sih addr : %llu\n", (unsigned long long)sih);
 	printk("[read] sih->pi_addr : %llu\n", (unsigned long long)sih->pi_addr);
 	printk("[read] pi addr : %llu\n", (unsigned long long)pi);
+	printk("[read] ino : %lu\n", inode->i_ino);
 
 	cpuid = nova_get_cpuid(sb);
 
@@ -1131,7 +1133,7 @@ memcpy:
 		}
 skip_verify:
 		//jw memcpy to kernel buffer	
-		memcpy(kpointer+copied, dax_mem+offset, nr);	
+		memcpy_mcsafe(kpointer+copied, dax_mem+offset, nr);	
 
 		copied += nr;
 		offset += nr;
@@ -1161,6 +1163,8 @@ out:
 	struct nova_inode_info_header *sih2 = &si2->header;
 	inode2->i_mode = inode->i_mode;
 	inode2->i_size = inode->i_size;
+	//memcpy(inode2, inode, sizeof(struct inode));
+
 	nova_init_header(sb, sih2, inode2->i_mode);
 
 	ino = NUMA_new_nova_inode(sb, &addr, to);
@@ -1178,7 +1182,7 @@ out:
 	printk("[mig] sih2 addr : %llu\n", (unsigned long long)sih2);
 	printk("[mig] sih2->pi_addr : %lu\n", sih2->pi_addr);
 	printk("[mig] pi2 addr : %llu\n", (unsigned long long)pi2);
-	//printk("[mig] pi2 ino : %llu\n", (unsigned long long)pi2->nova_ino);
+	printk("[mig] pi2 ino : %llu\n", (unsigned long long)pi2->nova_ino);
 	printk("[mig] loc : NODE%d\n", new_loc);
 
 	/*************************WRITE DATA**************************/
@@ -1272,7 +1276,7 @@ out:
 		//NOVA_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
 		nova_memunlock_range(sb, kmem + offset, bytes);
 		//copied = bytes - memcpy_to_pmem_nocache(kmem + offset, buf, bytes);
-		memcpy(kmem+offset, kpointer, bytes);
+		memcpy_mcsafe(kmem+offset, kpointer, bytes);
 		nova_memlock_range(sb, kmem + offset, bytes);
 		//NOVA_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
@@ -1376,7 +1380,7 @@ final:
 }
 static ssize_t nova_dax_file_migrate(struct file *filp, size_t len, loff_t *ppos, int from , int to)
 {
-	struct inode *inode = filp->f_mapping->host;
+	struct inode* inode = filp->f_mapping->host;
 	ssize_t res;
 
 	inode_lock_shared(inode);

@@ -1008,10 +1008,10 @@ void nova_jw_GC(struct inode *inode)
 	
 	int ret;
 
-	//ret = nova_free_inode_resource(sb, pi, sih);
+	ret = nova_free_inode_resource(sb, pi, sih);
 	//printk("[GC] ret : %d\n", ret);
 
-	/*if(ret){
+	if(ret){
 		nova_free_dram_resource(sb, sih);
 	}
 	else{
@@ -1019,7 +1019,7 @@ void nova_jw_GC(struct inode *inode)
 
                 inode->i_mtime = inode->i_ctime = current_time(inode);
                 inode->i_size = 0;	
-	}*/
+	}
 }
 void nova_evict_inode(struct inode *inode)
 {
@@ -1366,6 +1366,11 @@ void nova_dirty_inode(struct inode *inode, int flags)
 
 	pi = nova_get_block(sb, sih->pi_addr);
 
+	printk("[dirty] inode addr : %llu\n", (unsigned long long)inode);
+	printk("[dirty] sih addr : %llu\n", (unsigned long long)sih);
+	printk("[dirty] pi addr : %llu\n", (unsigned long long)pi);
+
+
 	/* check the inode before updating to make sure all fields are good */
 	if (nova_check_inode_integrity(sb, sih->ino, sih->pi_addr,
 					sih->alter_pi_addr, &inode_copy, 0) < 0)
@@ -1375,7 +1380,11 @@ void nova_dirty_inode(struct inode *inode, int flags)
 	 * we can do in-place atomic update
 	 */
 	nova_memunlock_inode(sb, pi);
+	printk("[dirty] inode->i_atime : %d\n", (int)inode->i_atime.tv_sec);
+
 	pi->i_atime = cpu_to_le32(inode->i_atime.tv_sec);
+	printk("[dirty] pi->i_atime : %d\n", (int)pi->i_atime);
+	
 	nova_update_inode_checksum(pi);
 	nova_update_alter_inode(sb, inode, pi);
 	nova_memlock_inode(sb, pi);
