@@ -163,9 +163,9 @@ void *nova_get_block_for_NUMA(struct super_block *sb, u64 block)
 }
 
 //jw get location of file (which node)
-/*int nova_get_file_loc(struct nova_inode *pi)
+int do_nova_get_file_loc(void *addr)
 {
-	unsigned long long pp = (unsigned long long)pi;
+	unsigned long long pp = (unsigned long long)addr;
 	int i;
 
 	for(i=0;i<number_of_devices;i++){
@@ -176,4 +176,4 @@ void *nova_get_block_for_NUMA(struct super_block *sb, u64 block)
 			return i;	
 	}
 	return -1;
-}*/
+}

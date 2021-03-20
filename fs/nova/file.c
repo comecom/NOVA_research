@@ -455,11 +455,7 @@ out_unlock:
 //jw
 static int nova_get_file_loc(void *addr)
 {
-	unsigned long long pp = (unsigned long long)addr;
-
-	if(pp < 18446616489359310848)
-		return 0;
-	else return 1;
+	return do_nova_get_file_loc(addr);
 }
 
 static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
@@ -724,9 +720,12 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 
 	pi = nova_get_block(sb, sih->pi_addr);
 
-	//jw local&remote init
-	//printk("[write] log_tail : %lu\n", (unsigned long)pi->log_tail);
+	//jw test
+	printk("[write] ---------------------------------------------------\n");
+	printk("[write] sih addr : %llu\n", (unsigned long long)sih);	
+	printk("[write] sih->addr : %lu\n", sih->pi_addr);
 	printk("[write] pi addr : %llu\n", (unsigned long long)pi);
+	printk("[write] write loc : NODE%d\n", nova_get_file_loc(pi));
 
 	pi->local = 0;
 	pi->remote = 0;
@@ -1155,7 +1154,8 @@ out:
 	
 	printk("[mig] ----------------------------------------------\n");
 	u64 addr = 0, ino;
-	
+
+		
 	struct inode *inode2 = new_inode(sb);
 	struct nova_inode_info *si2 = NOVA_I(inode2);
 	struct nova_inode_info_header *sih2 = &si2->header;
@@ -1172,7 +1172,8 @@ out:
 	pi2->nova_ino = ino;
 	sih2->ino = ino;
 	inode2->i_ino = ino;
-
+	
+	printk("[mig] sb addr : %llu\n", (unsigned long long)sb);
 	printk("[mig] inode2 addr : %llu\n", (unsigned long long)inode2);
 	printk("[mig] sih2 addr : %llu\n", (unsigned long long)sih2);
 	printk("[mig] sih2->pi_addr : %lu\n", sih2->pi_addr);
@@ -1333,6 +1334,7 @@ out:
 
 	if(written == kbuf_ret)	
 		ret = written;
+	else ret = 0;
 
 	if (pos > inode2->i_size) {
                 i_size_write(inode2, pos);
@@ -1357,15 +1359,20 @@ final:
 	pi2->remote = 0;
 
 	/*************************LINK TO filp*****************************/
-	
+		
 	filp->f_mapping->host = inode2;
 	
 	/************************Garbage Collection************************/
 
+	//jw free origin vfs inode, pmem inode, dram inode
+	//pi->valid = 0;
+	//nova_jw_GC(inode);
+	//nova_evict_inode(inode);
+        //ret = nova_free_inode_resource(sb, pi, sih);
+
 	printk("------------------------------------------------\n");
 
-	return copied ? copied : error;
-	//return ret ? ret : error;
+	return ret ? ret : error;
 }
 static ssize_t nova_dax_file_migrate(struct file *filp, size_t len, loff_t *ppos, int from , int to)
 {

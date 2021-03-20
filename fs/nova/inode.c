@@ -393,6 +393,8 @@ int nova_delete_file_tree(struct super_block *sb,
 		entry = radix_tree_lookup(&sih->tree, pgoff);
 		if (entry) {
 			ret = radix_tree_delete(&sih->tree, pgoff);
+			//printk("tree free\n");
+
 			BUG_ON(!ret || ret != entry);
 			if (entry != old_entry) {
 				if (old_entry && delete_nvmm) {
@@ -994,6 +996,31 @@ static int nova_free_inode_resource(struct super_block *sb,
 	return ret;
 }
 
+void nova_jw_GC(struct inode *inode)
+{
+	struct super_block *sb = inode->i_sb;
+        struct nova_inode *pi = nova_get_inode(sb, inode);
+        struct nova_inode_info_header *sih = NOVA_IH(inode);
+
+	printk("[GC] sb addr : %llu\n", (unsigned long long)sb);
+	printk("[GC] pi addr : %llu\n", (unsigned long long)pi);
+	printk("[GC] sih addr : %llu\n", (unsigned long long)sih);
+	
+	int ret;
+
+	//ret = nova_free_inode_resource(sb, pi, sih);
+	//printk("[GC] ret : %d\n", ret);
+
+	/*if(ret){
+		nova_free_dram_resource(sb, sih);
+	}
+	else{
+		pi = NULL; //delete pi
+
+                inode->i_mtime = inode->i_ctime = current_time(inode);
+                inode->i_size = 0;	
+	}*/
+}
 void nova_evict_inode(struct inode *inode)
 {
 	struct super_block *sb = inode->i_sb;
@@ -1038,8 +1065,8 @@ void nova_evict_inode(struct inode *inode)
 			goto out;
 
 		if (pi) {
-			ret = nova_free_inode_resource(sb, pi, sih);
-			if (ret)
+			ret = nova_free_inode_resource(sb, pi, sih);//0 if it's good GC
+			if (ret)//if good -> not goto out
 				goto out;
 		}
 

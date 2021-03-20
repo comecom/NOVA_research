@@ -76,8 +76,9 @@ struct nova_inode {
 	__le32	csum;            /* CRC32 checksum */
 
 	//jw definition
-	__le64 remote;
-	__le64 local;
+	__le64 remote;		/* count of remote access */
+	__le64 local;		/* count of local access */
+	__le32 do_mig;		/* state of migration */
 	
 	/* Leave 8 bytes for inode table tail pointer */
 } __attribute((__packed__));
@@ -408,10 +409,6 @@ unsigned long nova_get_last_blocknr(struct super_block *sb,
 	struct nova_inode_info_header *sih);
 int nova_get_inode_address(struct super_block *sb, u64 ino, int version,
 	u64 *pi_addr, int extendable, int extend_alternate);
-
-//jw
-int NUMA_get_inode_address(struct super_block *sb, u64 ino, int version,
-	u64 *pi_addr, int extendable, int extend_alternate, int to);
 int nova_set_blocksize_hint(struct super_block *sb, struct inode *inode,
 	struct nova_inode *pi, loff_t new_size);
 extern struct inode *nova_iget(struct super_block *sb, unsigned long ino);
@@ -431,10 +428,14 @@ int nova_delete_file_tree(struct super_block *sb,
 	bool delete_dead, u64 trasn_id);
 u64 nova_new_nova_inode(struct super_block *sb, u64 *pi_addr);
 
-//jw
-u64 NUMA_new_nova_inode(struct super_block *sb, u64 *pi_addr, int to);
 extern struct inode *nova_new_vfs_inode(enum nova_new_inode_type,
 	struct inode *dir, u64 pi_addr, u64 ino, umode_t mode,
 	size_t size, dev_t rdev, const struct qstr *qstr, u64 epoch_id);
+
+//jw header declaration
+u64 NUMA_new_nova_inode(struct super_block *sb, u64 *pi_addr, int to);
+int NUMA_get_inode_address(struct super_block *sb, u64 ino, int version,
+	u64 *pi_addr, int extendable, int extend_alternate, int to);
+void nova_jw_GC(struct inode *inode);
 
 #endif
