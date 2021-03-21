@@ -483,31 +483,29 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
 	index = pos >> PAGE_SHIFT;
 	offset = pos & ~PAGE_MASK;
 
-	//jw
 	pi = nova_get_block(sb, sih->pi_addr);
-	printk("[read] -----------------------------------------------------\n");
+
+	//jw
+	/*printk("[read] -----------------------------------------------------\n");
 	printk("[read] sb : %llu\n", (unsigned long long)sb);
 	printk("[read] sih addr : %llu\n", (unsigned long long)sih);
 	printk("[read] sih->pi_addr : %llu\n", (unsigned long long)sih->pi_addr);
 	printk("[read] pi addr : %llu\n", (unsigned long long)pi);
 	printk("[read] ino : %lu\n", inode->i_ino);
+	*/
 
 	cpuid = nova_get_cpuid(sb);
-
 	inode_loc = nova_get_file_loc(pi); 
-	// pmem size : about 800G
-	//if((unsigned long long)pi->log_tail<800000000000)inode_loc = 0;
-	//else inode_loc = 1;
 
 	if(cpuid/28 == inode_loc){
 		(pi->local) += 1;
-		printk("local access : %llu\n", (unsigned long long)pi->local);
+		//printk("local access : %llu\n", (unsigned long long)pi->local);
 	}
 	else{
 		(pi->remote) += 1;
-		printk("remote access : %llu\n", (unsigned long long)pi->remote);
-		if((unsigned long)pi->remote > 5)
-			printk("too many remote access!\n");
+		//printk("remote access : %llu\n", (unsigned long long)pi->remote);
+		//if((unsigned long)pi->remote > 5)
+			//printk("too many remote access!\n");
 	}
 	
 	if (!access_ok(buf, len)) {
@@ -519,7 +517,7 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
 	if (!isize)
 		goto out;
 
-	printk("[read] isize : %lld\n", isize);
+	//printk("[read] isize : %lld\n", isize);
 
 	nova_dbgv("%s: inode %lu, offset %lld, count %lu, size %lld\n",
 			__func__, inode->i_ino,	pos, len, isize);
@@ -538,8 +536,6 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
 
 	end_index = (isize - 1) >> PAGE_SHIFT;
 	do {
-		//printk("[read] in do-while loop\n");
-
 		unsigned long nr, left;
 		unsigned long nvmm;
 		void *dax_mem = NULL;
@@ -555,10 +551,6 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
 		}
 
 		entry = nova_get_write_entry(sb, sih, index);
-
-		//jw
-		//if(entry)
-		//printk("[read] entry get!\n");
 
 		if (unlikely(entry == NULL)) {
 			nova_dbgv("Required extent not found: pgoff %lu, inode size %lld\n",
@@ -723,14 +715,16 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 	pi = nova_get_block(sb, sih->pi_addr);
 
 	//jw test
-	printk("[write] ---------------------------------------------------\n");
+	/*printk("[write] ---------------------------------------------------\n");
 	printk("[write] sih addr : %llu\n", (unsigned long long)sih);	
 	printk("[write] sih->addr : %lu\n", sih->pi_addr);
 	printk("[write] pi addr : %llu\n", (unsigned long long)pi);
 	printk("[write] write loc : NODE%d\n", nova_get_file_loc(pi));
+	*/
 
 	pi->local = 0;
 	pi->remote = 0;
+	pi->do_mig = 0;
 
 	/* nova_inode tail pointer will be updated and we make sure all other
 	 * inode fields are good before checksumming the whole structure
@@ -1022,7 +1016,7 @@ static ssize_t do_dax_file_migrate(struct file *filp, size_t len, loff_t *ppos, 
 	int origin_loc = nova_get_file_loc(pi);	
 
 	//jw test
-	printk("[mig] -----------------------------------------------\n");
+	/*printk("[mig] -----------------------------------------------\n");
 	printk("[mig] cpu : %d\n", cpuid);	
 	printk("[mig] inode addr : %llu\n", (unsigned long long)inode);
 	printk("[mig] sih addr : %llu\n", (unsigned long long)sih);
@@ -1031,10 +1025,15 @@ static ssize_t do_dax_file_migrate(struct file *filp, size_t len, loff_t *ppos, 
 	printk("[mig] sih->ino : %lu\n", sih->ino);
 	printk("[mig] pi ino : %llu\n", (unsigned long long)pi->nova_ino);
 	printk("[mig] pi loc : NODE%d\n", origin_loc);
+	*/
 
 	//jw error handling
 	if(origin_loc != from || from == to)
 		return -1;
+	if(pi->do_mig)
+		return -1;
+
+	pi->do_mig = 1; /* cur state : migrating */
 
 	/**************READ TO KERNEL BUFFER*****************/
 
@@ -1046,7 +1045,7 @@ static ssize_t do_dax_file_migrate(struct file *filp, size_t len, loff_t *ppos, 
 	if (!isize)
 		goto out;
 
-	printk("[mig] isize : %lld\n", isize);
+	//printk("[mig] isize : %lld\n", isize);
 
 	if (len > isize - pos)
 		len = isize - pos;
@@ -1059,8 +1058,6 @@ static ssize_t do_dax_file_migrate(struct file *filp, size_t len, loff_t *ppos, 
 	end_index = (isize - 1) >> PAGE_SHIFT;
 
 	do {
-		//printk("[mig] in do-while loop\n");
-
 		unsigned long nr;
 		unsigned long nvmm;
 		void *dax_mem = NULL;
@@ -1076,10 +1073,6 @@ static ssize_t do_dax_file_migrate(struct file *filp, size_t len, loff_t *ppos, 
 		}
 
 		entry = nova_get_write_entry(sb, sih, index);
-
-		//jw
-		//if(entry)
-		//printk("[mig] entry get!\n");
 
 		if (unlikely(entry == NULL)) {
 			nova_dbgv("Required extent not found: pgoff %lu, inode size %lld\n",
@@ -1149,12 +1142,12 @@ out:
 
 	NOVA_STATS_ADD(read_bytes, copied);
 
-	printk("kbuf : %s\n", kbuf);
+	//printk("kbuf : %s\n", kbuf);
 
 	int kbuf_ret = copied;
 	/*************************MAKE INODE**************************/
 	
-	printk("[mig] ----------------------------------------------\n");
+	//printk("[mig] ----------------------------------------------\n");
 	u64 addr = 0, ino;
 
 		
@@ -1177,13 +1170,14 @@ out:
 	sih2->ino = ino;
 	inode2->i_ino = ino;
 	
-	printk("[mig] sb addr : %llu\n", (unsigned long long)sb);
+	/*printk("[mig] sb addr : %llu\n", (unsigned long long)sb);
 	printk("[mig] inode2 addr : %llu\n", (unsigned long long)inode2);
 	printk("[mig] sih2 addr : %llu\n", (unsigned long long)sih2);
 	printk("[mig] sih2->pi_addr : %lu\n", sih2->pi_addr);
 	printk("[mig] pi2 addr : %llu\n", (unsigned long long)pi2);
 	printk("[mig] pi2 ino : %llu\n", (unsigned long long)pi2->nova_ino);
 	printk("[mig] loc : NODE%d\n", new_loc);
+	*/
 
 	/*************************WRITE DATA**************************/
 	struct nova_file_write_entry entry_data;
@@ -1240,12 +1234,12 @@ out:
 	update.tail = sih2->log_tail;
 	update.alter_tail = sih2->alter_log_tail;
 
-	printk("[mig] ----------------------------------------------------\n");
+	//printk("[mig] ----------------------------------------------------\n");
 	while(num_blocks > 0){
 		offset = pos & (nova_inode_blk_size(sih2) - 1);
 		start_blk = pos >> sb->s_blocksize_bits;
 
-		int target_cpu = to * 28; // NODE0->cpu0, NODE1->cpu55
+		int target_cpu = to * 28; // NODE0->cpu0, NODE1->cpu28
 	
 
 		/* don't zero-out the allocated blocks */
@@ -1253,7 +1247,7 @@ out:
 				num_blocks, ALLOC_NO_INIT, target_cpu, ALLOC_FROM_HEAD);
 
 		//jw test
-		printk("[mig] allocated : %d\n", allocated);
+		//printk("[mig] allocated : %d\n", allocated);
 
 		step++;
 		bytes = sb->s_blocksize * allocated - offset;
@@ -1263,7 +1257,7 @@ out:
 		kmem = nova_get_block(inode2->i_sb, nova_get_block_off(sb, blocknr, sih2->i_blk_type));
 
 		//jw test
-		printk("[mig] kmem : %llu\n", (unsigned long long)kmem);
+		//printk("[mig] kmem : %llu\n", (unsigned long long)kmem);
 
 		if (offset || ((offset + bytes) & (PAGE_SIZE - 1)) != 0)  {
 			ret = nova_handle_head_tail_blocks(sb, inode2, pos, bytes, kmem);
@@ -1283,8 +1277,8 @@ out:
 		copied = bytes;
 
 		//jw test
-		printk("[mig] copied : %lu\n", copied);
-		printk("[mig] kstr : %s\n", (char*)kmem);
+		//printk("[mig] copied : %lu\n", copied);
+		//printk("[mig] kstr : %s\n", (char*)kmem);
 
 		if (pos + copied > inode2->i_size)
 			file_size = cpu_to_le64(pos + copied);
@@ -1354,17 +1348,20 @@ final:
 
 	if (try_inplace){
 		//return do_nova_inplace_file_write(filp, buf, len, ppos);
-		printk("try_inplace set!\n");
+		//printk("try_inplace set!\n");
 	}
 
 
 	kfree(kbuf);
 	pi2->local = 0;
 	pi2->remote = 0;
+	pi2->do_mig = 0;
 
 	/*************************LINK TO filp*****************************/
-		
+	
+	spin_lock(&filp->f_lock);	
 	filp->f_mapping->host = inode2;
+	spin_unlock(&filp->f_lock);
 	
 	/************************Garbage Collection************************/
 
@@ -1373,8 +1370,6 @@ final:
 	//nova_jw_GC(inode);
 	//nova_evict_inode(inode);
         //ret = nova_free_inode_resource(sb, pi, sih);
-
-	printk("------------------------------------------------\n");
 
 	return ret ? ret : error;
 }
