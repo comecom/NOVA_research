@@ -724,7 +724,7 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 
 	pi->local = 0;
 	pi->remote = 0;
-	pi->do_mig = 0;
+	arch_atomic_set(&pi->do_mig, 0);
 
 	/* nova_inode tail pointer will be updated and we make sure all other
 	 * inode fields are good before checksumming the whole structure
@@ -1030,10 +1030,10 @@ static ssize_t do_dax_file_migrate(struct file *filp, size_t len, loff_t *ppos, 
 	//jw error handling
 	if(origin_loc != from || from == to)
 		return -1;
-	if(pi->do_mig)
+	if(arch_atomic_read(&pi->do_mig))
 		return -1;
 
-	pi->do_mig = 1; /* cur state : migrating */
+	arch_atomic_add(1, &pi->do_mig); /* cur state : migrating */
 
 	/**************READ TO KERNEL BUFFER*****************/
 
@@ -1355,7 +1355,8 @@ final:
 	kfree(kbuf);
 	pi2->local = 0;
 	pi2->remote = 0;
-	pi2->do_mig = 0;
+
+	arch_atomic_set(&pi2->do_mig, 0);
 
 	/*************************LINK TO filp*****************************/
 	

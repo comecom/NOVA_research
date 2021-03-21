@@ -78,7 +78,7 @@ struct nova_inode {
 	//jw definition
 	__le64 remote;		/* count of remote access */
 	__le64 local;		/* count of local access */
-	__le32 do_mig;		/* state of migration */
+	atomic_t do_mig;		/* state of migration */
 	
 	/* Leave 8 bytes for inode table tail pointer */
 } __attribute((__packed__));
